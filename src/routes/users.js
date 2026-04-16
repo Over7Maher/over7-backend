@@ -70,13 +70,15 @@ router.post(
   [
     body('firebase_uid').notEmpty().withMessage('firebase_uid is required'),
     body('email').optional({ nullable: true }).isEmail().withMessage('Invalid email format'),
-    body('name').notEmpty().trim().withMessage('name is required'),
-    body('birth_date').isISO8601().withMessage('birth_date must be YYYY-MM-DD'),
+    body('name').optional({ nullable: true }).trim(),
+    body('birth_date').optional({ nullable: true }).isISO8601().withMessage('birth_date must be YYYY-MM-DD'),
   ],
   validate,
   async (req, res, next) => {
-    const { firebase_uid, name, birth_date } = req.body;
-    const email = req.body.email || `${firebase_uid}@anonymous.over7.app`;
+    const { firebase_uid } = req.body;
+    const email      = req.body.email      || `${firebase_uid}@anonymous.over7.app`;
+    const name       = req.body.name       || null;
+    const birth_date = req.body.birth_date || null;
 
     try {
       // Idempotent: return existing user if firebase_uid already registered
@@ -93,7 +95,7 @@ router.post(
         `INSERT INTO users (id, firebase_uid, email, name, birth_date)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING *`,
-        [id, firebase_uid, email, name.trim(), birth_date]
+        [id, firebase_uid, email, name, birth_date]
       );
 
       res.status(201).json(formatUser(rows[0]));
