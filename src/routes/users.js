@@ -69,13 +69,14 @@ router.post(
   '/register',
   [
     body('firebase_uid').notEmpty().withMessage('firebase_uid is required'),
-    body('email').isEmail().withMessage('Valid email is required'),
+    body('email').optional({ nullable: true }).isEmail().withMessage('Invalid email format'),
     body('name').notEmpty().trim().withMessage('name is required'),
     body('birth_date').isISO8601().withMessage('birth_date must be YYYY-MM-DD'),
   ],
   validate,
   async (req, res, next) => {
-    const { firebase_uid, email, name, birth_date } = req.body;
+    const { firebase_uid, name, birth_date } = req.body;
+    const email = req.body.email || `${firebase_uid}@anonymous.over7.app`;
 
     try {
       // Idempotent: return existing user if firebase_uid already registered
