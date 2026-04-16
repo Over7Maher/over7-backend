@@ -1,0 +1,175 @@
+const express = require('express');
+const { body, validationResult } = require('express-validator');
+const { v4: uuidv4 } = require('uuid');
+const pool = require('../db/pool');
+const auth = require('../middleware/auth');
+const { calculateCompletude } = require('../services/completude');
+
+const router = express.Router();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function validate(req, res, next) {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+  next();
+}
+
+// Columns exposed on profile responses (never return raw rows)
+function formatUser(row) {
+  return {
+    id:                  row.id,
+    email:               row.email,
+    name:                row.name,
+    birth_date:          row.birth_date,
+    city:                row.city,
+    bio:                 row.bio,
+    profile_picture_url: row.profile_picture_url,
+    photos:              row.photos,
+    tags:                row.tags,
+
+    // Dating preferences
+    relation_type:       row.relation_type,
+    family_plans:        row.family_plans,
+    communication_style: row.communication_style,
+    love_language:       row.love_language,
+
+    // Identity & lifestyle
+    gender:              row.gender,
+    height_cm:           row.height_cm,
+    languages:           row.languages,
+    astro_sign:          row.astro_sign,
+    education:           row.education,
+    job_title:           row.job_title,
+    company:             row.company,
+    pet:                 row.pet,
+    alcohol:             row.alcohol,
+    tobacco:             row.tobacco,
+    sport:               row.sport,
+    social_media:        row.social_media,
+    evenings_type:       row.evenings_type,
+    weekends_type:       row.weekends_type,
+    favorite_song:       row.favorite_song,
+
+    // Scores & pool
+    completude_pct:      row.completude_pct,
+    arena_votes_given:   row.arena_votes_given,
+    is_in_pool:          row.is_in_pool,
+    avg_rating:          row.avg_rating,
+
+    created_at:          row.created_at,
+  };
+}
+
+// ── POST /users/register ──────────────────────────────────────────────────────
+// Called once after Firebase sign-up, before onboarding.
+// Body: { firebase_uid, email, name, birth_date }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post(
+  '/register',
+  [
+    body('firebase_uid').notEmpty().withMessage('firebase_uid is required'),
+    body('email').isEmail().withMessage('Valid email is required'),
+    body('name').notEmpty().trim().withMessage('name is required'),
+    body('birth_date').isISO8601().withMessage('birth_date must be YYYY-MM-DD'),
+  ],
+  validate,
+  async (req, res, next) => {
+    const { firebase_uid, email, name, birth_date } = req.body;
+
+    try {
+      // Idempotent: return existing user if firebase_uid already registered
+      const existing = await pool.query(
+        'SELECT * FROM users WHERE firebase_uid = $1',
+        [firebase_uid]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(200).json(formatUser(existing.rows[0]));
+      }
+
+      const id = uuidv4();
+      const { rows } = await pool.query(
+        `INSERT INTO users (id, firebase_uid, email, name, birth_date)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [id, firebase_uid, email, name.trim(), birth_date]
+      );
+
+      res.status(201).json(formatUser(rows[0]));
+    } catch (err) {
+      if (err.code === '23505') {
+        return res.status(409).json({ error: 'Email already in use' });
+      }
+      next(err);
+    }
+  }
+);
+
+// ── GET /users/me ─────────────────────────────────────────────────────────────
+router.get('/me', auth, (req, res) => {
+  res.json(formatUser(req.user));
+});
+
+// ── PATCH /users/me ───────────────────────────────────────────────────────────
+// Accepted fields: all profile columns.
+// completude_pct is recalculated automatically — never accepted from client.
+// ─────────────────────────────────────────────────────────────────────────────
+const PATCHABLE = [
+  // Identity
+  'name', 'birth_date', 'city', 'bio', 'profile_picture_url', 'photos',
+  'tags', 'gender',
+  // Dating preferences
+  'relation_type', 'family_plans', 'communication_style', 'love_language',
+  // Physical & background
+  'height_cm', 'languages', 'astro_sign', 'education',
+  // Work
+  'job_title', 'company',
+  // Lifestyle
+  'pet', 'alcohol', 'tobacco', 'sport', 'social_media',
+  'evenings_type', 'weekends_type', 'favorite_song',
+  // Device
+  'push_token',
+];
+
+router.patch(
+  '/me',
+  auth,
+  [
+    body('birth_date').optional().isISO8601().withMessage('birth_date must be YYYY-MM-DD'),
+    body('height_cm').optional().isInt({ min: 100, max: 250 }).withMessage('height_cm must be 100–250'),
+    body('tags').optional().isArray().withMessage('tags must be an array'),
+    body('photos').optional().isArray().withMessage('photos must be an array'),
+    body('languages').optional().isArray().withMessage('languages must be an array'),
+  ],
+  validate,
+  async (req, res, next) => {
+    const updates = {};
+    for (const key of PATCHABLE) {
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided' });
+    }
+
+    // Merge incoming changes onto the current user to compute new completude_pct
+    const merged = { ...req.user, ...updates };
+    updates.completude_pct = calculateCompletude(merged);
+
+    const keys   = Object.keys(updates);
+    const values = Object.values(updates);
+    const set    = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+
+    try {
+      const { rows } = await pool.query(
+        `UPDATE users SET ${set} WHERE id = $${keys.length + 1} RETURNING *`,
+        [...values, req.user.id]
+      );
+      res.json(formatUser(rows[0]));
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+module.exports = router;
