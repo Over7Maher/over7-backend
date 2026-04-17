@@ -72,13 +72,21 @@ router.post(
     body('email').optional({ nullable: true }).isEmail().withMessage('Invalid email format'),
     body('name').optional({ nullable: true }).trim(),
     body('birth_date').optional({ nullable: true }).isISO8601().withMessage('birth_date must be YYYY-MM-DD'),
+    body('seeking').optional({ nullable: true }).isIn(['male', 'female', 'all']).withMessage('seeking must be male, female or all'),
+    body('age_min').optional({ nullable: true }).isInt({ min: 18, max: 70 }).withMessage('age_min must be 18–70'),
+    body('age_max').optional({ nullable: true }).isInt({ min: 18, max: 70 }).withMessage('age_max must be 18–70'),
+    body('distance_max').optional({ nullable: true }).isInt({ min: 1, max: 500 }).withMessage('distance_max must be 1–500'),
   ],
   validate,
   async (req, res, next) => {
     const { firebase_uid } = req.body;
-    const email      = req.body.email      || `${firebase_uid}@anonymous.over7.app`;
-    const name       = req.body.name       || null;
-    const birth_date = req.body.birth_date || null;
+    const email        = req.body.email        || `${firebase_uid}@anonymous.over7.app`;
+    const name         = req.body.name         || null;
+    const birth_date   = req.body.birth_date   || null;
+    const seeking      = req.body.seeking      || null;
+    const age_min      = req.body.age_min      ?? null;
+    const age_max      = req.body.age_max      ?? null;
+    const distance_max = req.body.distance_max ?? null;
 
     try {
       // Idempotent: return existing user if firebase_uid already registered
@@ -92,10 +100,10 @@ router.post(
 
       const id = uuidv4();
       const { rows } = await pool.query(
-        `INSERT INTO users (id, firebase_uid, email, name, birth_date)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO users (id, firebase_uid, email, name, birth_date, seeking, age_min, age_max, distance_max)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING *`,
-        [id, firebase_uid, email, name, birth_date]
+        [id, firebase_uid, email, name, birth_date, seeking, age_min, age_max, distance_max]
       );
 
       res.status(201).json(formatUser(rows[0]));

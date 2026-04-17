@@ -22,6 +22,10 @@ function validate(req, res, next) {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/profiles', async (req, res, next) => {
   try {
+    // seeking = null or 'all' → no gender filter; 'male'/'female' → filter on u.gender
+    const seeking = req.user.seeking;
+    const genderFilter = (seeking === 'male' || seeking === 'female') ? seeking : null;
+
     const { rows } = await pool.query(
       `SELECT
          u.id,
@@ -48,6 +52,7 @@ router.get('/profiles', async (req, res, next) => {
          u.evenings_type,
          u.weekends_type,
          u.favorite_song,
+         u.gender,
          u.avg_rating
        FROM users u
        WHERE u.id        != $1
@@ -58,9 +63,10 @@ router.get('/profiles', async (req, res, next) => {
            WHERE av.voter_id = $1
              AND av.voted_id = u.id
          )
+         AND ($3::TEXT IS NULL OR u.gender = $3)
        ORDER BY RANDOM()
        LIMIT $2`,
-      [req.user.id, PROFILES_PER_BATCH]
+      [req.user.id, PROFILES_PER_BATCH, genderFilter]
     );
 
     res.json({
