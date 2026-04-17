@@ -51,6 +51,12 @@ function formatUser(row) {
     weekends_type:       row.weekends_type,
     favorite_song:       row.favorite_song,
 
+    // Matching preferences
+    seeking:             row.seeking,
+    age_min:             row.age_min,
+    age_max:             row.age_max,
+    distance_max:        row.distance_max,
+
     // Scores & pool
     completude_pct:      row.completude_pct,
     arena_votes_given:   row.arena_votes_given,
