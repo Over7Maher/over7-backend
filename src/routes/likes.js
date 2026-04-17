@@ -57,7 +57,7 @@ router.post(
       // Reciprocal like exists → create match (user1_id < user2_id enforced by schema)
       const insertMatch = await pool.query(
         `INSERT INTO matches (user1_id, user2_id)
-         VALUES (LEAST($1, $2), GREATEST($1, $2))
+         VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid))
          ON CONFLICT DO NOTHING
          RETURNING id`,
         [likerId, likedId]
