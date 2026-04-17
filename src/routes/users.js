@@ -127,6 +127,49 @@ router.get('/me', auth, (req, res) => {
   res.json(formatUser(req.user));
 });
 
+// ── GET /users/me/counts ──────────────────────────────────────────────────────
+// Badge counters for the TabBar: unread likes and unread matches.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/me/counts', auth, async (req, res, next) => {
+  const userId = req.user.id;
+
+  try {
+    const [likesResult, matchesResult] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(*)::INT AS cnt
+         FROM likes l
+         WHERE l.liked_id = $1
+           AND NOT EXISTS (
+             SELECT 1 FROM matches m
+             WHERE m.user1_id = LEAST($1::uuid, l.liker_id)
+               AND m.user2_id = GREATEST($1::uuid, l.liker_id)
+           )`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT COUNT(DISTINCT m.id)::INT AS cnt
+         FROM matches m
+         WHERE (m.user1_id = $1 OR m.user2_id = $1)
+           AND m.is_active = TRUE
+           AND EXISTS (
+             SELECT 1 FROM messages msg
+             WHERE msg.match_id  = m.id
+               AND msg.sender_id != $1
+               AND msg.read_at   IS NULL
+           )`,
+        [userId]
+      ),
+    ]);
+
+    res.json({
+      likes_received:  likesResult.rows[0]?.cnt  ?? 0,
+      unread_matches:  matchesResult.rows[0]?.cnt ?? 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── PATCH /users/me ───────────────────────────────────────────────────────────
 // Accepted fields: all profile columns.
 // completude_pct is recalculated automatically — never accepted from client.
