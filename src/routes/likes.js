@@ -80,12 +80,13 @@ router.get('/received', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT
-         u.id                   AS id,
-         u.name                 AS name,
-         u.profile_picture_url  AS profile_picture_url,
-         u.city                 AS city,
-         u.birth_date           AS birth_date,
-         l.created_at           AS liked_at
+         u.id, u.name, u.profile_picture_url, u.city, u.birth_date,
+         u.bio, u.tags, u.relation_type, u.height_cm, u.languages,
+         u.astro_sign, u.education, u.job_title, u.company,
+         u.family_plans, u.communication_style, u.love_language,
+         u.pet, u.alcohol, u.tobacco, u.sport,
+         u.evenings_type, u.weekends_type, u.favorite_song, u.gender,
+         l.created_at AS liked_at
        FROM likes l
        JOIN users u ON u.id = l.liker_id
        WHERE l.liked_id = $1
