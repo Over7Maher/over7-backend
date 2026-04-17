@@ -140,6 +140,8 @@ const PATCHABLE = [
   'evenings_type', 'weekends_type', 'favorite_song',
   // Device
   'push_token',
+  // Matching preferences
+  'seeking', 'age_min', 'age_max', 'distance_max',
 ];
 
 router.patch(
@@ -151,6 +153,10 @@ router.patch(
     body('tags').optional().isArray().withMessage('tags must be an array'),
     body('photos').optional().isArray().withMessage('photos must be an array'),
     body('languages').optional().isArray().withMessage('languages must be an array'),
+    body('seeking').optional({ nullable: true }).isIn(['male', 'female', 'all']).withMessage('seeking must be male, female or all'),
+    body('age_min').optional({ nullable: true }).isInt({ min: 18, max: 70 }).withMessage('age_min must be 18–70'),
+    body('age_max').optional({ nullable: true }).isInt({ min: 18, max: 70 }).withMessage('age_max must be 18–70'),
+    body('distance_max').optional({ nullable: true }).isInt({ min: 1, max: 500 }).withMessage('distance_max must be 1–500'),
   ],
   validate,
   async (req, res, next) => {
