@@ -124,9 +124,18 @@ router.post(
 
       const message = { ...rows[0], sender_name: req.user.name };
 
-      // Broadcast to all sockets in the match room (including sender's other devices)
       const io = req.app.get('io');
-      if (io) io.to(`match:${matchId}`).emit('new_message', message);
+      if (io) {
+        // Broadcast to all sockets in the match room (including sender's other devices)
+        io.to(`match:${matchId}`).emit('new_message', message);
+
+        // Notify the other participant's personal room so offscreen badge updates in real time
+        const otherUserId = match.user1_id === userId ? match.user2_id : match.user1_id;
+        io.to(`user:${otherUserId}`).emit('notification', {
+          type:     'new_message',
+          match_id: matchId,
+        });
+      }
 
       res.status(201).json(message);
     } catch (err) {
