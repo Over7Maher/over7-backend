@@ -147,15 +147,21 @@ router.get('/me/counts', auth, async (req, res, next) => {
         [userId]
       ),
       pool.query(
-        `SELECT COUNT(DISTINCT m.id)::INT AS cnt
-         FROM matches m
+        `WITH me AS (
+           SELECT last_seen_matches_at FROM users WHERE id = $1
+         )
+         SELECT COUNT(DISTINCT m.id)::INT AS cnt
+         FROM matches m, me
          WHERE (m.user1_id = $1 OR m.user2_id = $1)
            AND m.is_active = TRUE
-           AND EXISTS (
-             SELECT 1 FROM messages msg
-             WHERE msg.match_id  = m.id
-               AND msg.sender_id != $1
-               AND msg.read_at   IS NULL
+           AND (
+             m.created_at > me.last_seen_matches_at
+             OR EXISTS (
+               SELECT 1 FROM messages msg
+               WHERE msg.match_id  = m.id
+                 AND msg.sender_id != $1
+                 AND msg.read_at   IS NULL
+             )
            )`,
         [userId]
       ),
@@ -165,6 +171,21 @@ router.get('/me/counts', auth, async (req, res, next) => {
       likes_received:  likesResult.rows[0]?.cnt  ?? 0,
       unread_matches:  matchesResult.rows[0]?.cnt ?? 0,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /users/me/seen-matches ───────────────────────────────────────────────
+// Called when the user opens the Matches tab — resets the new-match badge.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/me/seen-matches', auth, async (req, res, next) => {
+  try {
+    await pool.query(
+      `UPDATE users SET last_seen_matches_at = NOW() WHERE id = $1`,
+      [req.user.id]
+    );
+    res.status(204).end();
   } catch (err) {
     next(err);
   }
