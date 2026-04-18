@@ -25,7 +25,8 @@ app.use(express.json());
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/users',    require('./routes/users'));
 app.use('/api/arena',    require('./routes/arena'));
-app.use('/api/likes',    require('./routes/likes'));
+app.use('/api/likes',     require('./routes/likes'));
+app.use('/api/discover', require('./routes/discover'));
 app.use('/api/matches',  require('./routes/matches'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/upload',  require('./routes/upload'));
