@@ -2,6 +2,7 @@ const express = require('express');
 const { param, validationResult } = require('express-validator');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
+const haversineSQL = require('../db/haversine');
 
 const router = express.Router();
 
@@ -22,6 +23,8 @@ function validate(req, res, next) {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/', async (req, res, next) => {
   const userId = req.user.id;
+  const myLat  = req.user.latitude  ?? null;
+  const myLng  = req.user.longitude ?? null;
 
   try {
     const { rows } = await pool.query(
@@ -57,6 +60,9 @@ router.get('/', async (req, res, next) => {
          other.evenings_type                                          AS other_evenings_type,
          other.weekends_type                                          AS other_weekends_type,
          other.favorite_song                                          AS other_favorite_song,
+
+         -- Distance (NULL if either user has no coordinates)
+         ${haversineSQL('$2', '$3', 'other')}                        AS other_dist_km,
 
          -- Last message (LATERAL gives us the single most-recent row cheaply)
          last_msg.content                                             AS last_message,
@@ -97,7 +103,7 @@ router.get('/', async (req, res, next) => {
          AND m.is_active = TRUE
 
        ORDER BY COALESCE(last_msg.created_at, m.created_at) DESC`,
-      [userId]
+      [userId, myLat, myLng]
     );
 
     res.json(rows);

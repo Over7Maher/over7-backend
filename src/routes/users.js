@@ -191,6 +191,38 @@ router.post('/me/seen-matches', auth, async (req, res, next) => {
   }
 });
 
+// ── PATCH /users/me/location ──────────────────────────────────────────────────
+// Updates the user's position (rounded to 2 decimal places ≈ 1 km grid).
+// Also flips is_in_pool = TRUE so the profile becomes discoverable.
+// ─────────────────────────────────────────────────────────────────────────────
+router.patch(
+  '/me/location',
+  auth,
+  [
+    body('latitude')
+      .notEmpty().withMessage('latitude is required')
+      .isFloat({ min: -90,  max: 90  }).withMessage('latitude must be between -90 and 90'),
+    body('longitude')
+      .notEmpty().withMessage('longitude is required')
+      .isFloat({ min: -180, max: 180 }).withMessage('longitude must be between -180 and 180'),
+  ],
+  validate,
+  async (req, res, next) => {
+    const lat = Math.round(req.body.latitude  * 100) / 100;
+    const lng = Math.round(req.body.longitude * 100) / 100;
+
+    try {
+      await pool.query(
+        `UPDATE users SET latitude = $1, longitude = $2, is_in_pool = TRUE WHERE id = $3`,
+        [lat, lng, req.user.id]
+      );
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // ── PATCH /users/me ───────────────────────────────────────────────────────────
 // Accepted fields: all profile columns.
 // completude_pct is recalculated automatically — never accepted from client.

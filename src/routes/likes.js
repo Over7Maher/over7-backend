@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
+const haversineSQL = require('../db/haversine');
 
 const router = express.Router();
 
@@ -102,6 +103,8 @@ router.post(
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/received', async (req, res, next) => {
   const userId = req.user.id;
+  const myLat  = req.user.latitude  ?? null;
+  const myLng  = req.user.longitude ?? null;
 
   try {
     const { rows } = await pool.query(
@@ -112,7 +115,8 @@ router.get('/received', async (req, res, next) => {
          u.family_plans, u.communication_style, u.love_language,
          u.pet, u.alcohol, u.tobacco, u.sport,
          u.evenings_type, u.weekends_type, u.favorite_song, u.gender,
-         l.created_at AS liked_at
+         l.created_at AS liked_at,
+         ${haversineSQL('$2', '$3', 'u')} AS dist_km
        FROM likes l
        JOIN users u ON u.id = l.liker_id
        WHERE l.liked_id = $1
@@ -122,7 +126,7 @@ router.get('/received', async (req, res, next) => {
              AND m.user2_id = GREATEST($1, l.liker_id)
          )
        ORDER BY l.created_at DESC`,
-      [userId]
+      [userId, myLat, myLng]
     );
 
     res.json(rows);
