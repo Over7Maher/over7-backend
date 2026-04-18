@@ -29,10 +29,34 @@ router.get('/', async (req, res, next) => {
          m.id                                                         AS match_id,
          m.created_at                                                 AS matched_at,
 
-         -- Other user
+         -- Other user — identity
          other.id                                                     AS other_id,
          other.name                                                   AS other_name,
          other.profile_picture_url                                    AS other_photo,
+         other.bio                                                    AS other_bio,
+         other.city                                                   AS other_city,
+         other.birth_date                                             AS other_birth_date,
+         other.gender                                                 AS other_gender,
+
+         -- Other user — lifestyle & profile
+         other.tags                                                   AS other_tags,
+         other.relation_type                                          AS other_relation_type,
+         other.height_cm                                              AS other_height_cm,
+         other.languages                                              AS other_languages,
+         other.astro_sign                                             AS other_astro_sign,
+         other.education                                              AS other_education,
+         other.job_title                                              AS other_job_title,
+         other.company                                                AS other_company,
+         other.family_plans                                           AS other_family_plans,
+         other.communication_style                                    AS other_communication_style,
+         other.love_language                                          AS other_love_language,
+         other.pet                                                    AS other_pet,
+         other.alcohol                                                AS other_alcohol,
+         other.tobacco                                                AS other_tobacco,
+         other.sport                                                  AS other_sport,
+         other.evenings_type                                          AS other_evenings_type,
+         other.weekends_type                                          AS other_weekends_type,
+         other.favorite_song                                          AS other_favorite_song,
 
          -- Last message (LATERAL gives us the single most-recent row cheaply)
          last_msg.content                                             AS last_message,
