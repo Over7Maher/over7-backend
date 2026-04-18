@@ -153,4 +153,31 @@ router.get(
   }
 );
 
+// ── DELETE /api/matches/:id ───────────────────────────────────────────────────
+// Soft-deletes a match by setting is_active = FALSE.
+// Only a member of the match (user1_id or user2_id) can unmatch.
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete(
+  '/:id',
+  [param('id').isUUID().withMessage('Match id must be a valid UUID')],
+  validate,
+  async (req, res, next) => {
+    try {
+      const { rowCount } = await pool.query(
+        `UPDATE matches
+         SET is_active = FALSE
+         WHERE id = $1
+           AND (user1_id = $2 OR user2_id = $2)
+           AND is_active = TRUE`,
+        [req.params.id, req.user.id]
+      );
+
+      if (rowCount === 0) return res.status(404).json({ error: 'Match not found or access denied' });
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 module.exports = router;
