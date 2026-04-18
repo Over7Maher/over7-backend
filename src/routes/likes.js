@@ -29,6 +29,8 @@ router.post(
     }
 
     try {
+      const io = req.app.get('io');
+
       const insertLike = await pool.query(
         `INSERT INTO likes (liker_id, liked_id)
          VALUES ($1, $2)
@@ -49,6 +51,12 @@ router.post(
       );
 
       if (reciprocal.rowCount === 0) {
+        if (io && likeId) {
+          io.to(`user:${likedId}`).emit('new_like', {
+            liker_id:   likerId,
+            liker_name: req.user.name,
+          });
+        }
         return res.status(status).json({ like_id: likeId, is_match: false });
       }
 
@@ -62,6 +70,26 @@ router.post(
       );
 
       const matchId = insertMatch.rows[0]?.id ?? null;
+
+      if (io && matchId) {
+        const { rows: likedRows } = await pool.query(
+          `SELECT name FROM users WHERE id = $1`,
+          [likedId]
+        );
+        const likedName = likedRows[0]?.name ?? '';
+
+        io.to(`user:${likerId}`).emit('new_match', {
+          match_id:   matchId,
+          other_id:   likedId,
+          other_name: likedName,
+        });
+        io.to(`user:${likedId}`).emit('new_match', {
+          match_id:   matchId,
+          other_id:   likerId,
+          other_name: req.user.name,
+        });
+      }
+
       return res.status(status).json({ like_id: likeId, is_match: true, match_id: matchId });
     } catch (err) {
       next(err);

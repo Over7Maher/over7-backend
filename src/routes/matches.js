@@ -163,16 +163,24 @@ router.delete(
   validate,
   async (req, res, next) => {
     try {
-      const { rowCount } = await pool.query(
+      const { rowCount, rows } = await pool.query(
         `UPDATE matches
          SET is_active = FALSE
          WHERE id = $1
            AND (user1_id = $2 OR user2_id = $2)
-           AND is_active = TRUE`,
+           AND is_active = TRUE
+         RETURNING user1_id, user2_id`,
         [req.params.id, req.user.id]
       );
 
       if (rowCount === 0) return res.status(404).json({ error: 'Match not found or access denied' });
+
+      const io = req.app.get('io');
+      if (io) {
+        const otherId = rows[0].user1_id === req.user.id ? rows[0].user2_id : rows[0].user1_id;
+        io.to(`user:${otherId}`).emit('match_cancelled', { match_id: req.params.id });
+      }
+
       res.status(204).end();
     } catch (err) {
       next(err);

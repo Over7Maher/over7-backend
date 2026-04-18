@@ -65,6 +65,7 @@ function initSocket(server) {
 
   // ── Connection ──────────────────────────────────────────────────────────────
   io.on('connection', (socket) => {
+    socket.join(`user:${socket.user.id}`);
     console.log(`[socket] + ${socket.user.name} (${socket.user.id})`);
 
     // ── join_match ────────────────────────────────────────────────────────────
