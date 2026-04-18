@@ -37,21 +37,19 @@ router.post(
         [likerId, likedId]
       );
 
-      // Like already existed — idempotent response
-      if (insertLike.rowCount === 0) {
-        return res.status(200).json({ is_match: false });
-      }
+      // null when the like already existed (ON CONFLICT DO NOTHING)
+      const likeId = insertLike.rows[0]?.id ?? null;
+      const status  = likeId ? 201 : 200;
 
-      const likeId = insertLike.rows[0].id;
-
-      // Check for reciprocal like
+      // Check for reciprocal like even if the like already existed —
+      // the match may not have been created on the original insert.
       const reciprocal = await pool.query(
         `SELECT 1 FROM likes WHERE liker_id = $1 AND liked_id = $2`,
         [likedId, likerId]
       );
 
       if (reciprocal.rowCount === 0) {
-        return res.status(201).json({ like_id: likeId, is_match: false });
+        return res.status(status).json({ like_id: likeId, is_match: false });
       }
 
       // Reciprocal like exists → create match (user1_id < user2_id enforced by schema)
@@ -64,7 +62,7 @@ router.post(
       );
 
       const matchId = insertMatch.rows[0]?.id ?? null;
-      return res.status(201).json({ like_id: likeId, is_match: true, match_id: matchId });
+      return res.status(status).json({ like_id: likeId, is_match: true, match_id: matchId });
     } catch (err) {
       next(err);
     }
