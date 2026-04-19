@@ -136,9 +136,13 @@ router.get('/me/counts', auth, async (req, res, next) => {
   try {
     const [likesResult, matchesResult] = await Promise.all([
       pool.query(
-        `SELECT COUNT(*)::INT AS cnt
-         FROM likes l
+        `WITH me AS (
+           SELECT last_seen_likes_at FROM users WHERE id = $1
+         )
+         SELECT COUNT(*)::INT AS cnt
+         FROM likes l, me
          WHERE l.liked_id = $1
+           AND l.created_at > me.last_seen_likes_at
            AND NOT EXISTS (
              SELECT 1 FROM matches m
              WHERE m.user1_id = LEAST($1::uuid, l.liker_id)
@@ -183,6 +187,21 @@ router.post('/me/seen-matches', auth, async (req, res, next) => {
   try {
     await pool.query(
       `UPDATE users SET last_seen_matches_at = NOW() WHERE id = $1`,
+      [req.user.id]
+    );
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /users/me/seen-likes ─────────────────────────────────────────────────
+// Called when the user opens the Likes tab — resets the new-likes badge.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/me/seen-likes', auth, async (req, res, next) => {
+  try {
+    await pool.query(
+      `UPDATE users SET last_seen_likes_at = NOW() WHERE id = $1`,
       [req.user.id]
     );
     res.status(204).end();
