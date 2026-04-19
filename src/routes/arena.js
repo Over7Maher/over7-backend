@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
+const { notBlockedClause } = require('../db/blocks');
 
 const router = express.Router();
 
@@ -58,6 +59,7 @@ router.get('/profiles', async (req, res, next) => {
        WHERE u.id        != $1
          AND u.is_in_pool = TRUE
          AND u.is_active  = TRUE
+         AND ${notBlockedClause('$1', 'u')}
          AND NOT EXISTS (
            SELECT 1 FROM arena_votes av
            WHERE av.voter_id = $1

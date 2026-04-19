@@ -3,6 +3,7 @@ const { query, validationResult } = require('express-validator');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const haversineSQL = require('../db/haversine');
+const { notBlockedClause } = require('../db/blocks');
 
 const router = express.Router();
 
@@ -119,6 +120,7 @@ router.get(
            WHERE u.id        != $1
              AND u.is_active  = TRUE
              AND u.is_in_pool = TRUE
+             AND ${notBlockedClause('$1', 'u')}
              AND u.latitude  IS NOT NULL
              AND u.longitude IS NOT NULL
              AND ($6::TEXT IS NULL OR u.gender = $6)

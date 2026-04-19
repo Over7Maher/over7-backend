@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const haversineSQL = require('../db/haversine');
+const { notBlockedClause } = require('../db/blocks');
 
 const router = express.Router();
 
@@ -125,6 +126,7 @@ router.get('/received', async (req, res, next) => {
            WHERE m.user1_id = LEAST($1, l.liker_id)
              AND m.user2_id = GREATEST($1, l.liker_id)
          )
+         AND ${notBlockedClause('$1', 'u')}
        ORDER BY l.created_at DESC`,
       [userId, myLat, myLng]
     );

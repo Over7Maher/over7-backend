@@ -3,6 +3,7 @@ const { param, validationResult } = require('express-validator');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const haversineSQL = require('../db/haversine');
+const { notBlockedClause } = require('../db/blocks');
 
 const router = express.Router();
 
@@ -101,6 +102,7 @@ router.get('/', async (req, res, next) => {
 
        WHERE (m.user1_id = $1 OR m.user2_id = $1)
          AND m.is_active = TRUE
+         AND ${notBlockedClause('$1', 'other')}
 
        ORDER BY COALESCE(last_msg.created_at, m.created_at) DESC`,
       [userId, myLat, myLng]
