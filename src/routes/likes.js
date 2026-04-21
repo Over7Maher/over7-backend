@@ -4,6 +4,7 @@ const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const haversineSQL = require('../db/haversine');
 const { notBlockedClause } = require('../db/blocks');
+const { sendPushToUser } = require('../services/push');
 
 const router = express.Router();
 
@@ -90,6 +91,9 @@ router.post(
           other_id:   likerId,
           other_name: req.user.name,
         });
+
+        sendPushToUser(likerId, 'Nouveau match !', `${likedName} a matché avec toi`, { match_id: matchId, type: 'new_match' });
+        sendPushToUser(likedId, 'Nouveau match !', `${req.user.name} a matché avec toi`, { match_id: matchId, type: 'new_match' });
       }
 
       return res.status(status).json({ like_id: likeId, is_match: true, match_id: matchId });

@@ -210,6 +210,33 @@ router.post('/me/seen-likes', auth, async (req, res, next) => {
   }
 });
 
+// ── PATCH /users/me/push-token ────────────────────────────────────────────────
+// Registers or updates the Expo push token for the current user's device.
+// ─────────────────────────────────────────────────────────────────────────────
+router.patch(
+  '/me/push-token',
+  auth,
+  [
+    body('token')
+      .isString().withMessage('token must be a string')
+      .trim()
+      .notEmpty().withMessage('token cannot be empty')
+      .isLength({ max: 200 }).withMessage('token exceeds 200 characters'),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      await pool.query(
+        'UPDATE users SET push_token = $1 WHERE id = $2',
+        [req.body.token.trim(), req.user.id]
+      );
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // ── PATCH /users/me/location ──────────────────────────────────────────────────
 // Updates the user's position (rounded to 2 decimal places ≈ 1 km grid).
 // Also flips is_in_pool = TRUE so the profile becomes discoverable.

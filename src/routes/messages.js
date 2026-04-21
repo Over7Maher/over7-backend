@@ -3,6 +3,7 @@ const { body, param, validationResult } = require('express-validator');
 const { v4: uuidv4 } = require('uuid');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
+const { sendPushToUser } = require('../services/push');
 
 const router = express.Router();
 const MESSAGES_LIMIT = 50;
@@ -135,6 +136,8 @@ router.post(
           type:     'new_message',
           match_id: matchId,
         });
+
+        sendPushToUser(otherUserId, req.user.name, message.content, { match_id: matchId, type: 'new_message' });
       }
 
       res.status(201).json(message);
