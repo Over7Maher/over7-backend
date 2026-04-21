@@ -122,7 +122,7 @@ router.post(
         `UPDATE users
          SET arena_votes_given = arena_votes_given + 1
          WHERE id = $1
-         RETURNING arena_votes_given, is_in_pool, completude_pct, latitude, longitude`,
+         RETURNING arena_votes_given, arena_votes_received, avg_rating, completude_pct`,
         [voter_id]
       );
 
@@ -132,7 +132,7 @@ router.post(
         [newIsInPool, voter_id]
       );
 
-      // 3 — Recalculate avg_rating + increment votes_received for the voted profile
+      // 3 — Recalculate avg_rating for the voted profile (must run before shouldBeInPool check)
       await client.query(
         `UPDATE users
          SET avg_rating = (
@@ -144,11 +144,12 @@ router.post(
         [voted_id]
       );
 
+      // 4 — Increment votes_received and fetch fresh data (avg_rating already updated above)
       const { rows: votedRows } = await client.query(
         `UPDATE users
          SET arena_votes_received = arena_votes_received + 1
          WHERE id = $1
-         RETURNING completude_pct, latitude, longitude, arena_votes_given, arena_votes_received`,
+         RETURNING completude_pct, arena_votes_given, arena_votes_received, avg_rating`,
         [voted_id]
       );
 

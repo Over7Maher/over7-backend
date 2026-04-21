@@ -259,10 +259,9 @@ router.patch(
     const lng = Math.round(req.body.longitude * 100) / 100;
 
     try {
-      const inPool = shouldBeInPool({ ...req.user, latitude: lat, longitude: lng });
       await pool.query(
-        `UPDATE users SET latitude = $1, longitude = $2, is_in_pool = $3 WHERE id = $4`,
-        [lat, lng, inPool, req.user.id]
+        `UPDATE users SET latitude = $1, longitude = $2 WHERE id = $3`,
+        [lat, lng, req.user.id]
       );
       res.status(204).end();
     } catch (err) {
