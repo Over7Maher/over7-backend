@@ -95,6 +95,7 @@ router.get(
              u.evenings_type,
              u.weekends_type,
              u.favorite_song,
+             u.social_media,
              u.avg_rating,
              u.completude_pct,
              ${haversineSQL('$9', '$10', 'u')} AS dist_km,

@@ -62,6 +62,7 @@ router.get('/', async (req, res, next) => {
          other.evenings_type                                          AS other_evenings_type,
          other.weekends_type                                          AS other_weekends_type,
          other.favorite_song                                          AS other_favorite_song,
+         other.social_media                                          AS other_social_media,
 
          -- Distance (NULL if either user has no coordinates)
          ${haversineSQL('$2', '$3', 'other')}                        AS other_dist_km,

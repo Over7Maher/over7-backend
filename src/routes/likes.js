@@ -149,7 +149,7 @@ router.get('/received', async (req, res, next) => {
          u.astro_sign, u.education, u.job_title, u.company,
          u.family_plans, u.communication_style, u.love_language,
          u.pet, u.alcohol, u.tobacco, u.sport,
-         u.evenings_type, u.weekends_type, u.favorite_song, u.gender,
+         u.evenings_type, u.weekends_type, u.favorite_song, u.social_media, u.gender,
          l.created_at AS liked_at,
          ${haversineSQL('$2', '$3', 'u')} AS dist_km
        FROM likes l
