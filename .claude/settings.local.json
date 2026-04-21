@@ -4,7 +4,9 @@
       "Bash(gh repo *)",
       "Read(//c/Projets/Over7/Over7/**)",
       "Bash(npm install *)",
-      "Bash(npx expo *)"
+      "Bash(npx expo *)",
+      "Bash(git *)",
+      "Bash(curl.exe *)"
     ]
   }
 }
