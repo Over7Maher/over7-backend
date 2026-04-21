@@ -132,7 +132,7 @@ router.post(
         [newIsInPool, voter_id]
       );
 
-      // 3 — Recalculate avg_rating for the voted profile
+      // 3 — Recalculate avg_rating + increment votes_received for the voted profile
       await client.query(
         `UPDATE users
          SET avg_rating = (
@@ -142,6 +142,20 @@ router.post(
          )
          WHERE id = $1`,
         [voted_id]
+      );
+
+      const { rows: votedRows } = await client.query(
+        `UPDATE users
+         SET arena_votes_received = arena_votes_received + 1
+         WHERE id = $1
+         RETURNING completude_pct, latitude, longitude, arena_votes_given, arena_votes_received`,
+        [voted_id]
+      );
+
+      const votedNewIsInPool = shouldBeInPool(votedRows[0]);
+      await client.query(
+        `UPDATE users SET is_in_pool = $1 WHERE id = $2`,
+        [votedNewIsInPool, voted_id]
       );
 
       await client.query('COMMIT');
