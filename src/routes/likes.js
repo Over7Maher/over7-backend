@@ -103,6 +103,35 @@ router.post(
   }
 );
 
+// ── PATCH /api/likes/:id/dismiss ─────────────────────────────────────────────
+// Soft-deletes a received like without removing the row.
+// ─────────────────────────────────────────────────────────────────────────────
+router.patch('/:id/dismiss', async (req, res, next) => {
+  try {
+    const likeId = req.params.id;
+
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(likeId)) {
+      return res.status(400).json({ error: 'invalid like id' });
+    }
+
+    const result = await pool.query(
+      `UPDATE likes
+       SET dismissed_at = NOW()
+       WHERE id = $1 AND liked_id = $2 AND dismissed_at IS NULL
+       RETURNING id`,
+      [likeId, req.user.id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'like not found or already dismissed' });
+    }
+
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── GET /api/likes/received ───────────────────────────────────────────────────
 // Users who liked the current user and with whom no match exists yet.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,6 +154,7 @@ router.get('/received', async (req, res, next) => {
        FROM likes l
        JOIN users u ON u.id = l.liker_id
        WHERE l.liked_id = $1
+         AND l.dismissed_at IS NULL
          AND NOT EXISTS (
            SELECT 1 FROM matches m
            WHERE m.user1_id = LEAST($1, l.liker_id)
