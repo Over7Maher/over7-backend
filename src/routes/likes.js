@@ -143,6 +143,7 @@ router.get('/received', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT
+         l.id AS like_id,
          u.id, u.name, u.profile_picture_url, u.city, u.birth_date,
          u.bio, u.tags, u.relation_type, u.height_cm, u.languages,
          u.astro_sign, u.education, u.job_title, u.company,
