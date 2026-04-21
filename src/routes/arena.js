@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const { notBlockedClause } = require('../db/blocks');
+const { shouldBeInPool } = require('../services/poolGate');
 
 const router = express.Router();
 
@@ -116,17 +117,19 @@ router.post(
         [voter_id, voted_id, rating]
       );
 
-      // 2 — Increment voter's votes_given; flip is_in_pool if threshold reached
+      // 2 — Increment voter's votes_given, then re-evaluate pool eligibility
       const { rows: voterRows } = await client.query(
         `UPDATE users
-         SET arena_votes_given = arena_votes_given + 1,
-             is_in_pool = CASE
-               WHEN arena_votes_given + 1 >= $1 THEN TRUE
-               ELSE is_in_pool
-             END
-         WHERE id = $2
-         RETURNING arena_votes_given, is_in_pool`,
-        [VOTES_REQUIRED, voter_id]
+         SET arena_votes_given = arena_votes_given + 1
+         WHERE id = $1
+         RETURNING arena_votes_given, is_in_pool, completude_pct, latitude, longitude`,
+        [voter_id]
+      );
+
+      const newIsInPool = shouldBeInPool(voterRows[0]);
+      await client.query(
+        `UPDATE users SET is_in_pool = $1 WHERE id = $2`,
+        [newIsInPool, voter_id]
       );
 
       // 3 — Recalculate avg_rating for the voted profile
@@ -143,12 +146,12 @@ router.post(
 
       await client.query('COMMIT');
 
-      const { arena_votes_given, is_in_pool } = voterRows[0];
+      const { arena_votes_given } = voterRows[0];
 
       res.status(201).json({
-        success:        true,
-        votes_given:    arena_votes_given,
-        is_in_pool,
+        success:         true,
+        votes_given:     arena_votes_given,
+        is_in_pool:      newIsInPool,
         remaining_votes: Math.max(0, VOTES_REQUIRED - arena_votes_given),
       });
     } catch (err) {

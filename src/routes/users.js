@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const { calculateCompletude } = require('../services/completude');
+const { shouldBeInPool } = require('../services/poolGate');
 
 const router = express.Router();
 
@@ -239,7 +240,7 @@ router.patch(
 
 // ── PATCH /users/me/location ──────────────────────────────────────────────────
 // Updates the user's position (rounded to 2 decimal places ≈ 1 km grid).
-// Also flips is_in_pool = TRUE so the profile becomes discoverable.
+// is_in_pool is re-evaluated against the full pool gate conditions.
 // ─────────────────────────────────────────────────────────────────────────────
 router.patch(
   '/me/location',
@@ -258,9 +259,10 @@ router.patch(
     const lng = Math.round(req.body.longitude * 100) / 100;
 
     try {
+      const inPool = shouldBeInPool({ ...req.user, latitude: lat, longitude: lng });
       await pool.query(
-        `UPDATE users SET latitude = $1, longitude = $2, is_in_pool = TRUE WHERE id = $3`,
-        [lat, lng, req.user.id]
+        `UPDATE users SET latitude = $1, longitude = $2, is_in_pool = $3 WHERE id = $4`,
+        [lat, lng, inPool, req.user.id]
       );
       res.status(204).end();
     } catch (err) {
@@ -317,9 +319,10 @@ router.patch(
       return res.status(400).json({ error: 'No valid fields provided' });
     }
 
-    // Merge incoming changes onto the current user to compute new completude_pct
+    // Merge incoming changes onto the current user to compute new completude_pct and pool eligibility
     const merged = { ...req.user, ...updates };
     updates.completude_pct = calculateCompletude(merged);
+    updates.is_in_pool = shouldBeInPool(merged);
 
     const keys   = Object.keys(updates);
     const values = Object.values(updates);
