@@ -37,6 +37,7 @@ router.get('/', async (req, res, next) => {
          other.id                                                     AS other_id,
          other.name                                                   AS other_name,
          other.profile_picture_url                                    AS other_photo,
+         other.photos                                                 AS other_photos,
          other.bio                                                    AS other_bio,
          other.city                                                   AS other_city,
          other.birth_date                                             AS other_birth_date,
