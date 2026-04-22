@@ -178,9 +178,19 @@ router.post(
 
       if (!voterWasInPool && newIsInPool) {
         io.to(`user:${voter_id}`).emit('pool_unlocked');
+        await pool.query(
+          `UPDATE users SET pool_unlocked_pending = TRUE, pool_unlocked_at = NOW()
+           WHERE id = $1 AND pool_unlocked_at IS NULL`,
+          [voter_id]
+        );
       }
       if (!votedWasInPool && votedNewIsInPool) {
         io.to(`user:${voted_id}`).emit('pool_unlocked');
+        await pool.query(
+          `UPDATE users SET pool_unlocked_pending = TRUE, pool_unlocked_at = NOW()
+           WHERE id = $1 AND pool_unlocked_at IS NULL`,
+          [voted_id]
+        );
       }
 
       const { arena_votes_given } = voterRows[0];

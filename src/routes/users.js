@@ -59,12 +59,14 @@ function formatUser(row) {
     distance_max:        row.distance_max,
 
     // Scores & pool
-    completude_pct:      row.completude_pct,
-    arena_votes_given:   row.arena_votes_given,
-    is_in_pool:          row.is_in_pool,
-    avg_rating:          row.avg_rating,
+    completude_pct:          row.completude_pct,
+    arena_votes_given:       row.arena_votes_given,
+    is_in_pool:              row.is_in_pool,
+    avg_rating:              row.avg_rating,
+    pool_unlocked_pending:   row.pool_unlocked_pending,
+    pool_unlocked_at:        row.pool_unlocked_at,
 
-    created_at:          row.created_at,
+    created_at:              row.created_at,
   };
 }
 
@@ -337,6 +339,11 @@ router.patch(
       if (!wasInPool && newIsInPool) {
         const io = req.app.get('io');
         io.to(`user:${req.user.id}`).emit('pool_unlocked');
+        await pool.query(
+          `UPDATE users SET pool_unlocked_pending = TRUE, pool_unlocked_at = NOW()
+           WHERE id = $1 AND pool_unlocked_at IS NULL`,
+          [req.user.id]
+        );
       }
       res.json(formatUser(rows[0]));
     } catch (err) {
@@ -344,5 +351,20 @@ router.patch(
     }
   }
 );
+
+// ── POST /users/me/acknowledge-pool-unlock ────────────────────────────────────
+// Called after the celebration modal is shown — resets the pending flag.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/me/acknowledge-pool-unlock', auth, async (req, res, next) => {
+  try {
+    await pool.query(
+      `UPDATE users SET pool_unlocked_pending = FALSE WHERE id = $1`,
+      [req.user.id]
+    );
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = router;
