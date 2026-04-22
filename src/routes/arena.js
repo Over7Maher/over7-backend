@@ -100,7 +100,8 @@ router.post(
   validate,
   async (req, res, next) => {
     const { voted_id, rating } = req.body;
-    const voter_id = req.user.id;
+    const voter_id       = req.user.id;
+    const voterWasInPool = req.user.is_in_pool === true;
 
     if (voted_id === voter_id) {
       return res.status(400).json({ error: 'Cannot vote on your own profile' });
@@ -132,7 +133,14 @@ router.post(
         [newIsInPool, voter_id]
       );
 
-      // 3 — Recalculate avg_rating for the voted profile (must run before shouldBeInPool check)
+      // 3a — Snapshot voted user's current pool status before any update
+      const { rows: votedBefore } = await client.query(
+        `SELECT is_in_pool FROM users WHERE id = $1`,
+        [voted_id]
+      );
+      const votedWasInPool = votedBefore[0]?.is_in_pool === true;
+
+      // 3b — Recalculate avg_rating for the voted profile (must run before shouldBeInPool check)
       await client.query(
         `UPDATE users
          SET avg_rating = (
@@ -167,6 +175,13 @@ router.post(
         new_avg_rating:     votedRows[0].avg_rating,
         new_votes_received: votedRows[0].arena_votes_received,
       });
+
+      if (!voterWasInPool && newIsInPool) {
+        io.to(`user:${voter_id}`).emit('pool_unlocked');
+      }
+      if (!votedWasInPool && votedNewIsInPool) {
+        io.to(`user:${voted_id}`).emit('pool_unlocked');
+      }
 
       const { arena_votes_given } = voterRows[0];
 

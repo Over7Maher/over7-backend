@@ -321,7 +321,9 @@ router.patch(
     // Merge incoming changes onto the current user to compute new completude_pct and pool eligibility
     const merged = { ...req.user, ...updates };
     updates.completude_pct = calculateCompletude(merged);
-    updates.is_in_pool = shouldBeInPool(merged);
+    const wasInPool   = req.user.is_in_pool === true;
+    const newIsInPool = shouldBeInPool(merged);
+    updates.is_in_pool = newIsInPool;
 
     const keys   = Object.keys(updates);
     const values = Object.values(updates);
@@ -332,6 +334,10 @@ router.patch(
         `UPDATE users SET ${set} WHERE id = $${keys.length + 1} RETURNING *`,
         [...values, req.user.id]
       );
+      if (!wasInPool && newIsInPool) {
+        const io = req.app.get('io');
+        io.to(`user:${req.user.id}`).emit('pool_unlocked');
+      }
       res.json(formatUser(rows[0]));
     } catch (err) {
       next(err);
