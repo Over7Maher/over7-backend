@@ -161,6 +161,13 @@ router.post(
 
       await client.query('COMMIT');
 
+      const io = req.app.get('io');
+      io.to(`user:${voted_id}`).emit('new_rating', {
+        rating,
+        new_avg_rating:     votedRows[0].avg_rating,
+        new_votes_received: votedRows[0].arena_votes_received,
+      });
+
       const { arena_votes_given } = voterRows[0];
 
       res.status(201).json({
