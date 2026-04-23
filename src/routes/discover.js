@@ -64,6 +64,10 @@ router.get(
     const myTags       = me.tags          ?? [];
     const myRelType    = me.relation_type ?? null;
     const distMax      = me.distance_max  ?? null;
+    const myLat        = me.latitude  !== null ? parseFloat(me.latitude)  : null;
+    const myLng        = me.longitude !== null ? parseFloat(me.longitude) : null;
+
+    console.log('[Discover] Parsed coords:', { myLat, myLng, types: { latType: typeof myLat, lngType: typeof myLng } });
 
     console.log('[Discover] Query params:', {
       me_id: me.id,
@@ -156,7 +160,7 @@ router.get(
          LIMIT  $2
          OFFSET $3`,
         [me.id, limit, offset, myTags, myRelType, genderFilter, ageMin, ageMax,
-         me.latitude, me.longitude, distMax, me.gender ?? null]
+         myLat, myLng, distMax, me.gender ?? null]
       );
 
       console.log('[Discover] SQL rows count:', rows.length);
