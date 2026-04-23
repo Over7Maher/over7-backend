@@ -152,6 +152,7 @@ router.get(
                SELECT 1 FROM matches m
                WHERE m.user1_id = LEAST($1::uuid, u.id)
                  AND m.user2_id = GREATEST($1::uuid, u.id)
+                 AND m.is_active = TRUE
              )
          )
          SELECT * FROM candidates
