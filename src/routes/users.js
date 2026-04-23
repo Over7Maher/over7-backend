@@ -151,6 +151,7 @@ router.get('/me/counts', auth, async (req, res, next) => {
              SELECT 1 FROM matches m
              WHERE m.user1_id = LEAST($1::uuid, l.liker_id)
                AND m.user2_id = GREATEST($1::uuid, l.liker_id)
+               AND m.is_active = TRUE
            )`,
         [userId]
       ),
