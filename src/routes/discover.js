@@ -67,20 +67,6 @@ router.get(
     const myLat        = me.latitude  !== null ? parseFloat(me.latitude)  : null;
     const myLng        = me.longitude !== null ? parseFloat(me.longitude) : null;
 
-    console.log('[Discover] Parsed coords:', { myLat, myLng, types: { latType: typeof myLat, lngType: typeof myLng } });
-
-    console.log('[Discover] Query params:', {
-      me_id: me.id,
-      limit, offset,
-      myTags, myRelType,
-      genderFilter,
-      ageMin, ageMax,
-      latitude: me.latitude,
-      longitude: me.longitude,
-      distMax,
-      me_gender: me.gender,
-    });
-
     try {
       const { rows } = await pool.query(
         `WITH candidates AS (
@@ -163,9 +149,6 @@ router.get(
         [me.id, limit, offset, myTags, myRelType, genderFilter, ageMin, ageMax,
          myLat, myLng, distMax, me.gender ?? null]
       );
-
-      console.log('[Discover] SQL rows count:', rows.length);
-      console.log('[Discover] First row (if any):', rows[0] || 'none');
 
       res.json({
         profiles:         rows,
