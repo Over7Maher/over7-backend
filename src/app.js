@@ -4,6 +4,7 @@ const express      = require('express');
 const http         = require('http');
 const cors         = require('cors');
 const helmet       = require('helmet');
+const rateLimit    = require('express-rate-limit');
 const initSocket   = require('./services/socket');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -17,12 +18,75 @@ const server = http.createServer(app);
 const io = initSocket(server);
 app.set('io', io);
 
+// ── CORS ──────────────────────────────────────────────────────────────────────
+// Whitelist via env var ALLOWED_ORIGINS (CSV). When unset, allow everything
+// (dev-friendly default). Requests without an Origin header (Postman,
+// native mobile clients) are always allowed.
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+  : null;
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin)                              return callback(null, true);
+    if (!allowedOrigins)                      return callback(null, true);
+    if (allowedOrigins.includes(origin))      return callback(null, true);
+    callback(new Error('CORS: origin not allowed'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
+// ── Rate limiters ─────────────────────────────────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs:          15 * 60 * 1000,
+  max:               300,
+  standardHeaders:   true,
+  legacyHeaders:     false,
+  message:           { error: 'Too many requests, please try again later' },
+});
+app.use(globalLimiter);
+
+const authLimiter = rateLimit({
+  windowMs:          15 * 60 * 1000,
+  max:               10,
+  standardHeaders:   true,
+  legacyHeaders:     false,
+  message:           { error: 'Too many auth attempts, please try again later' },
+});
+
+const likesLimiter = rateLimit({
+  windowMs:          60 * 1000,
+  max:               60,
+  standardHeaders:   true,
+  legacyHeaders:     false,
+  message:           { error: 'Too many likes, please slow down' },
+});
+
+const messagesLimiter = rateLimit({
+  windowMs:          60 * 1000,
+  max:               100,
+  standardHeaders:   true,
+  legacyHeaders:     false,
+  message:           { error: 'Too many messages, please slow down' },
+});
+
+const reportsLimiter = rateLimit({
+  windowMs:          60 * 60 * 1000,
+  max:               5,
+  standardHeaders:   true,
+  legacyHeaders:     false,
+  message:           { error: 'Too many reports, please try again later' },
+});
+
 // ── Routes ────────────────────────────────────────────────────────────────────
+app.use('/api/users/register', authLimiter);
+app.use('/api/likes',          likesLimiter);
+app.use('/api/messages',       messagesLimiter);
+app.use('/api/reports',        reportsLimiter);
+
 app.use('/api/users',    require('./routes/users'));
 app.use('/api/arena',    require('./routes/arena'));
 app.use('/api/likes',     require('./routes/likes'));

@@ -24,7 +24,13 @@ const pool     = require('../db/pool');
  */
 function initSocket(server) {
   const io = new Server(server, {
-    cors:              { origin: '*', methods: ['GET', 'POST'] },
+    cors: {
+      origin: process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+        : '*',
+      methods:     ['GET', 'POST'],
+      credentials: true,
+    },
     pingTimeout:       20000,
     pingInterval:      10000,
     transports:        ['websocket', 'polling'],
