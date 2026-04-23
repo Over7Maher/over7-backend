@@ -24,14 +24,20 @@ function validate(req, res, next) {
 //   relation_type        — +5 if profile matches user's preferred relation type
 //   completude_pct × 0.1 — +0–10 bonus for profile completeness
 //
-// Filters applied:
+// Base filters (always applied):
 //   - is_in_pool = TRUE, is_active = TRUE
-//   - gender matches user's `seeking` preference (skipped if null / 'all')
-//   - age within user's [age_min, age_max] range (skipped if null)
-//   - profiles already liked by the user are excluded
-//   - profiles with an existing match are excluded
-//   - profiles without lat/lng are excluded
-//   - distance <= me.distance_max km (or unrestricted if distance_max is null)
+//   - self / blocks / already liked / active matches excluded
+//   - profiles without lat/lng excluded
+//   - reciprocal seeking (candidate must accept user's gender)
+//
+// Optional query-param filters (each is applied only if provided):
+//   gender, age_min, age_max, distance_max, height_min,
+//   relation_type, family_plans, pet, alcohol, tobacco, sport,
+//   evenings_type, weekends_type, communication_style, love_language,
+//   education, city (substring ILIKE), tags (comma-separated, intersection),
+//   languages (comma-separated, intersection).
+// Missing query params fall back to the user's own preferences for
+// gender/age_min/age_max/distance_max.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get(
   '/profiles',
@@ -58,14 +64,35 @@ router.get(
     const limit  = req.query.limit  ?? 10;
     const offset = req.query.offset ?? 0;
 
-    const genderFilter = (me.seeking === 'male' || me.seeking === 'female') ? me.seeking : null;
-    const ageMin       = me.age_min       ?? null;
-    const ageMax       = me.age_max       ?? null;
-    const myTags       = me.tags          ?? [];
-    const myRelType    = me.relation_type ?? null;
-    const distMax      = me.distance_max  ?? null;
-    const myLat        = me.latitude  !== null ? parseFloat(me.latitude)  : null;
-    const myLng        = me.longitude !== null ? parseFloat(me.longitude) : null;
+    // Query-param overrides fall back to the user's stored preferences
+    const seekingSource = req.query.gender || me.seeking;
+    const genderFilter  = (seekingSource === 'male' || seekingSource === 'female') ? seekingSource : null;
+    const ageMin        = req.query.age_min      ? parseInt(req.query.age_min, 10)      : (me.age_min      ?? null);
+    const ageMax        = req.query.age_max      ? parseInt(req.query.age_max, 10)      : (me.age_max      ?? null);
+    const distMax       = req.query.distance_max ? parseInt(req.query.distance_max, 10) : (me.distance_max ?? null);
+
+    // Scoring inputs — always taken from the user's own profile
+    const myTags    = me.tags          ?? [];
+    const myRelType = me.relation_type ?? null;
+    const myLat     = me.latitude  !== null ? parseFloat(me.latitude)  : null;
+    const myLng     = me.longitude !== null ? parseFloat(me.longitude) : null;
+
+    // New optional query-param filters
+    const heightMin          = req.query.height_min ? parseInt(req.query.height_min, 10) : null;
+    const relationType       = req.query.relation_type       || null;
+    const familyPlans        = req.query.family_plans        || null;
+    const pet                = req.query.pet                 || null;
+    const alcohol            = req.query.alcohol             || null;
+    const tobacco            = req.query.tobacco             || null;
+    const sport              = req.query.sport               || null;
+    const eveningsType       = req.query.evenings_type       || null;
+    const weekendsType       = req.query.weekends_type       || null;
+    const communicationStyle = req.query.communication_style || null;
+    const loveLanguage       = req.query.love_language       || null;
+    const education          = req.query.education           || null;
+    const city               = req.query.city                || null;
+    const tagsFilter         = req.query.tags      ? req.query.tags.split(',').map(s => s.trim()).filter(Boolean)      : null;
+    const languagesFilter    = req.query.languages ? req.query.languages.split(',').map(s => s.trim()).filter(Boolean) : null;
 
     try {
       const { rows } = await pool.query(
@@ -130,6 +157,21 @@ router.get(
              AND (u.seeking IS NULL OR u.seeking = 'all' OR u.seeking = $12::TEXT)
              AND ($7::INT  IS NULL OR DATE_PART('year', AGE(u.birth_date)) >= $7)
              AND ($8::INT  IS NULL OR DATE_PART('year', AGE(u.birth_date)) <= $8)
+             AND ($13::INT    IS NULL OR u.height_cm           >= $13)
+             AND ($14::TEXT   IS NULL OR u.relation_type        = $14)
+             AND ($15::TEXT   IS NULL OR u.family_plans         = $15)
+             AND ($16::TEXT   IS NULL OR u.pet                  = $16)
+             AND ($17::TEXT   IS NULL OR u.alcohol              = $17)
+             AND ($18::TEXT   IS NULL OR u.tobacco              = $18)
+             AND ($19::TEXT   IS NULL OR u.sport                = $19)
+             AND ($20::TEXT   IS NULL OR u.evenings_type        = $20)
+             AND ($21::TEXT   IS NULL OR u.weekends_type        = $21)
+             AND ($22::TEXT   IS NULL OR u.communication_style  = $22)
+             AND ($23::TEXT   IS NULL OR u.love_language        = $23)
+             AND ($24::TEXT   IS NULL OR u.education            = $24)
+             AND ($25::TEXT   IS NULL OR u.city ILIKE '%' || $25 || '%')
+             AND ($26::TEXT[] IS NULL OR u.tags      && $26::TEXT[])
+             AND ($27::TEXT[] IS NULL OR u.languages && $27::TEXT[])
              AND NOT EXISTS (
                SELECT 1 FROM likes l
                WHERE l.liker_id = $1 AND l.liked_id = u.id
@@ -146,8 +188,13 @@ router.get(
          ORDER BY score DESC, avg_rating DESC NULLS LAST
          LIMIT  $2
          OFFSET $3`,
-        [me.id, limit, offset, myTags, myRelType, genderFilter, ageMin, ageMax,
-         myLat, myLng, distMax, me.gender ?? null]
+        [
+          me.id, limit, offset, myTags, myRelType, genderFilter, ageMin, ageMax,
+          myLat, myLng, distMax, me.gender ?? null,
+          heightMin, relationType, familyPlans, pet, alcohol, tobacco, sport,
+          eveningsType, weekendsType, communicationStyle, loveLanguage,
+          education, city, tagsFilter, languagesFilter,
+        ]
       );
 
       res.json({
