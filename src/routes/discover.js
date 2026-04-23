@@ -125,6 +125,7 @@ router.get(
              AND u.latitude  IS NOT NULL
              AND u.longitude IS NOT NULL
              AND ($6::TEXT IS NULL OR u.gender = $6)
+             AND (u.seeking IS NULL OR u.seeking = 'all' OR u.seeking = $12::TEXT)
              AND ($7::INT  IS NULL OR DATE_PART('year', AGE(u.birth_date)) >= $7)
              AND ($8::INT  IS NULL OR DATE_PART('year', AGE(u.birth_date)) <= $8)
              AND NOT EXISTS (
@@ -143,7 +144,7 @@ router.get(
          LIMIT  $2
          OFFSET $3`,
         [me.id, limit, offset, myTags, myRelType, genderFilter, ageMin, ageMax,
-         me.latitude, me.longitude, distMax]
+         me.latitude, me.longitude, distMax, me.gender ?? null]
       );
 
       res.json({
