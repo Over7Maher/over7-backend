@@ -65,6 +65,7 @@ function formatUser(row) {
     avg_rating:              row.avg_rating,
     pool_unlocked_pending:   row.pool_unlocked_pending,
     pool_unlocked_at:        row.pool_unlocked_at,
+    arena_intro_seen:        row.arena_intro_seen,
 
     created_at:              row.created_at,
   };
@@ -359,6 +360,21 @@ router.post('/me/acknowledge-pool-unlock', auth, async (req, res, next) => {
   try {
     await pool.query(
       `UPDATE users SET pool_unlocked_pending = FALSE WHERE id = $1`,
+      [req.user.id]
+    );
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /users/me/acknowledge-arena-intro ────────────────────────────────────
+// Called after the Arena onboarding modal is shown on first access.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/me/acknowledge-arena-intro', auth, async (req, res, next) => {
+  try {
+    await pool.query(
+      `UPDATE users SET arena_intro_seen = TRUE WHERE id = $1`,
       [req.user.id]
     );
     res.status(204).end();
