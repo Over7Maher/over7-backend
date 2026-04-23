@@ -66,7 +66,7 @@ router.get('/profiles', async (req, res, next) => {
              AND av.voted_id = u.id
          )
          AND ($3::TEXT IS NULL OR u.gender = $3)
-       ORDER BY RANDOM()
+       ORDER BY u.is_in_pool ASC NULLS FIRST, RANDOM()
        LIMIT $2`,
       [req.user.id, PROFILES_PER_BATCH, genderFilter]
     );
