@@ -33,6 +33,9 @@
  *    2 — Lieu de résidence
  *    2 — Chanson préférée
  *    5 — Genre
+ *
+ * BONUS PROMPTS (+15 pts max, non-inclus dans les 100 points ci-dessus)
+ *   +3 par prompt rempli, plafonné à 5 prompts (+15 max). Le total reste ≤ 100.
  */
 function calculateCompletude(user) {
   let pts = 0;
@@ -68,6 +71,10 @@ function calculateCompletude(user) {
   if (user.city)           pts += 2;  // Lieu de résidence
   if (user.favorite_song)  pts += 2;  // Chanson préférée
   if (user.gender)         pts += 5;  // Genre
+
+  // ── Bonus prompts (Hinge-style) ───────────────────────────────────────────
+  const promptsCount = Math.min(user.prompts_count ?? 0, 5);
+  pts += promptsCount * 3;
 
   return Math.min(100, pts);
 }
@@ -108,6 +115,11 @@ function completudeBreakdown(user) {
     { label: 'Chanson préférée',        pts: 2,  done: !!user.favorite_song },
     { label: 'Genre',                   pts: 5,  done: !!user.gender },
   ];
+
+  const promptsCount = Math.min(user.prompts_count ?? 0, 5);
+  for (let i = 1; i <= promptsCount; i++) {
+    items.push({ label: `Prompt ${i}`, pts: 3, done: true });
+  }
 
   const total = items.reduce((sum, i) => sum + (i.done ? i.pts : 0), 0);
   return { total: Math.min(100, total), items };

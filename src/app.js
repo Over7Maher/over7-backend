@@ -26,6 +26,7 @@ app.use(express.json());
 app.use('/api/users',    require('./routes/users'));
 app.use('/api/arena',    require('./routes/arena'));
 app.use('/api/likes',     require('./routes/likes'));
+app.use('/api/prompts',  require('./routes/prompts'));
 app.use('/api/discover', require('./routes/discover'));
 app.use('/api/matches',  require('./routes/matches'));
 app.use('/api/messages', require('./routes/messages'));

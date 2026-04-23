@@ -321,8 +321,15 @@ router.patch(
       return res.status(400).json({ error: 'No valid fields provided' });
     }
 
+    // Prompts count is needed for the completude bonus (+3 per prompt, max 5)
+    const { rows: promptRows } = await pool.query(
+      `SELECT COUNT(*)::INT AS count FROM user_prompts WHERE user_id = $1`,
+      [req.user.id]
+    );
+    const promptsCount = promptRows[0]?.count ?? 0;
+
     // Merge incoming changes onto the current user to compute new completude_pct and pool eligibility
-    const merged = { ...req.user, ...updates };
+    const merged = { ...req.user, ...updates, prompts_count: promptsCount };
     updates.completude_pct = calculateCompletude(merged);
     const wasInPool   = req.user.is_in_pool === true;
     const newIsInPool = shouldBeInPool(merged);

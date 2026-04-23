@@ -127,6 +127,19 @@ router.get(
              u.social_media,
              u.avg_rating,
              u.completude_pct,
+             (
+               SELECT json_agg(
+                 json_build_object(
+                   'prompt_id', up.prompt_id,
+                   'question',  pc.question,
+                   'answer',    up.answer,
+                   'position',  up.position
+                 ) ORDER BY up.position
+               )
+               FROM user_prompts up
+               JOIN prompts_catalog pc ON pc.id = up.prompt_id
+               WHERE up.user_id = u.id
+             ) AS prompts,
              ${haversineSQL('$9', '$10', 'u')} AS dist_km,
              (
                COALESCE(u.avg_rating, 5) * 2.0
