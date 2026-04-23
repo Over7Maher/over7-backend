@@ -63,12 +63,14 @@ router.post(
         return res.status(status).json({ like_id: likeId, is_match: false });
       }
 
-      // Reciprocal like exists → create match (user1_id < user2_id enforced by schema)
+      // Reciprocal like exists → create or reactivate match (user1_id < user2_id enforced by schema)
       const insertMatch = await pool.query(
         `INSERT INTO matches (user1_id, user2_id)
          VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid))
-         ON CONFLICT DO NOTHING
-         RETURNING id`,
+         ON CONFLICT (user1_id, user2_id) DO UPDATE
+           SET is_active  = TRUE,
+               created_at = CASE WHEN matches.is_active = FALSE THEN NOW() ELSE matches.created_at END
+         RETURNING id, (xmax = 0) AS is_new`,
         [likerId, likedId]
       );
 
@@ -160,6 +162,7 @@ router.get('/received', async (req, res, next) => {
            SELECT 1 FROM matches m
            WHERE m.user1_id = LEAST($1, l.liker_id)
              AND m.user2_id = GREATEST($1, l.liker_id)
+             AND m.is_active = TRUE
          )
          AND ${notBlockedClause('$1', 'u')}
        ORDER BY l.created_at DESC`,
