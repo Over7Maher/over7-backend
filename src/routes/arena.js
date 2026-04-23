@@ -58,7 +58,6 @@ router.get('/profiles', async (req, res, next) => {
          u.avg_rating
        FROM users u
        WHERE u.id        != $1
-         AND u.is_in_pool = TRUE
          AND u.is_active  = TRUE
          AND ${notBlockedClause('$1', 'u')}
          AND NOT EXISTS (
