@@ -175,9 +175,10 @@ router.get('/my-slots', async (req, res, next) => {
       : false;
 
     res.json({
-      current_slot:      current,
-      registrations:     rows,
-      is_registered_now: isRegisteredNow,
+      current_slot:            current,
+      registrations:           rows,
+      is_registered_now:       isRegisteredNow,
+      speed_date_distance_max: req.user.speed_date_distance_max ?? 20,
     });
   } catch (err) {
     next(err);
@@ -278,6 +279,9 @@ router.get('/profiles', async (req, res, next) => {
     const myGender    = me.gender ?? null;
     const mySeeking   = (me.seeking === 'male' || me.seeking === 'female') ? me.seeking : null;
     const currentType = current ? current.slot_type : '';
+    // Clamped in the PATCH endpoint; also defended here in case the column is
+    // missing (pre-migration) or corrupted.
+    const distanceMax = Math.max(5, Math.min(50, me.speed_date_distance_max ?? 20));
 
     const limit  = Math.min(parseInt(req.query.limit, 10)  || 20, 50);
     const offset = parseInt(req.query.offset, 10) || 0;
@@ -343,31 +347,61 @@ router.get('/profiles', async (req, res, next) => {
            )
        )
        SELECT * FROM candidates
-       WHERE dist_km <= 20
+       WHERE dist_km <= $9
        ORDER BY in_current_slot DESC, dist_km ASC, avg_rating DESC NULLS LAST
-       LIMIT  $9
-       OFFSET $10`,
+       LIMIT  $10
+       OFFSET $11`,
       [
         me.id, myLat, myLng,
         today, mySlotTypes,
         mySeeking, myGender,
         currentType,
+        distanceMax,
         limit, offset,
       ]
     );
 
     res.json({
-      profiles:         rows,
-      count:            rows.length,
-      my_slots:         mySlotTypes,
-      live_slots:       liveSlots,
-      current_slot:     current,
+      profiles:                rows,
+      count:                   rows.length,
+      my_slots:                mySlotTypes,
+      live_slots:              liveSlots,
+      current_slot:            current,
+      speed_date_distance_max: distanceMax,
       offset,
-      no_more_profiles: rows.length < limit,
+      no_more_profiles:        rows.length < limit,
     });
   } catch (err) {
     next(err);
   }
 });
+
+// ── PATCH /api/speed-date/distance ───────────────────────────────────────────
+// Updates the persistent Speed Date max distance (km). Range: 5-50.
+// ─────────────────────────────────────────────────────────────────────────────
+router.patch(
+  '/distance',
+  [
+    body('distance_max')
+      .isInt({ min: 5, max: 50 })
+      .withMessage('distance_max must be an integer between 5 and 50')
+      .toInt(),
+  ],
+  validate,
+  async (req, res, next) => {
+    try {
+      const { rows } = await pool.query(
+        `UPDATE users
+            SET speed_date_distance_max = $1
+          WHERE id = $2
+          RETURNING speed_date_distance_max`,
+        [req.body.distance_max, req.user.id]
+      );
+      res.json({ speed_date_distance_max: rows[0]?.speed_date_distance_max });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 module.exports = router;
