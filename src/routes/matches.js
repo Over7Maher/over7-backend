@@ -81,7 +81,11 @@ router.get('/', async (req, res, next) => {
            WHERE l.is_speed_date = TRUE
              AND ((l.liker_id = m.user1_id AND l.liked_id = m.user2_id)
                OR (l.liker_id = m.user2_id AND l.liked_id = m.user1_id))
-         ) AND m.created_at > NOW() - INTERVAL '4 hours')             AS is_speed_date
+         ) AND m.created_at > NOW() - INTERVAL '4 hours')             AS is_speed_date,
+
+         -- Speed Date slot captured at match creation (for chat banner display)
+         m.speed_date_slot_type                                       AS speed_date_slot_type,
+         m.speed_date_slot_date                                       AS speed_date_slot_date
 
        FROM matches m
 
