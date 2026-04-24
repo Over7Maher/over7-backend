@@ -30,7 +30,10 @@ function computeNextMidnightBrussels() {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post(
   '/',
-  [body('liked_id').isUUID().withMessage('liked_id must be a valid UUID')],
+  [
+    body('liked_id').isUUID().withMessage('liked_id must be a valid UUID'),
+    body('is_speed_date').optional().isBoolean().withMessage('is_speed_date must be a boolean'),
+  ],
   validate,
   async (req, res, next) => {
     const likerId = req.user.id;
@@ -42,18 +45,23 @@ router.post(
 
     try {
       const io = req.app.get('io');
+      const isSpeedDate = req.body.is_speed_date === true;
 
+      // Preserve an existing is_speed_date=TRUE if a subsequent normal like
+      // arrives (e.g. outside the slot window) — OR with the incoming value.
       const insertLike = await pool.query(
-        `INSERT INTO likes (liker_id, liked_id)
-         VALUES ($1, $2)
-         ON CONFLICT (liker_id, liked_id) DO NOTHING
-         RETURNING id`,
-        [likerId, likedId]
+        `INSERT INTO likes (liker_id, liked_id, is_speed_date)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (liker_id, liked_id) DO UPDATE
+           SET is_speed_date = likes.is_speed_date OR EXCLUDED.is_speed_date
+         RETURNING id, is_speed_date, (xmax = 0) AS is_new`,
+        [likerId, likedId, isSpeedDate]
       );
 
-      // null when the like already existed (ON CONFLICT DO NOTHING)
-      const likeId = insertLike.rows[0]?.id ?? null;
-      const status  = likeId ? 201 : 200;
+      const likeRow = insertLike.rows[0];
+      const likeId  = likeRow.id;
+      const isNew   = likeRow.is_new === true;
+      const status  = isNew ? 201 : 200;
 
       // Check for reciprocal like even if the like already existed —
       // the match may not have been created on the original insert.
@@ -63,13 +71,18 @@ router.post(
       );
 
       if (reciprocal.rowCount === 0) {
-        if (io && likeId) {
+        if (io && isNew) {
           io.to(`user:${likedId}`).emit('new_like', {
-            liker_id:   likerId,
-            liker_name: req.user.name,
+            liker_id:      likerId,
+            liker_name:    req.user.name,
+            is_speed_date: likeRow.is_speed_date === true,
           });
         }
-        return res.status(status).json({ like_id: likeId, is_match: false });
+        return res.status(status).json({
+          like_id:       likeId,
+          is_match:      false,
+          is_speed_date: likeRow.is_speed_date === true,
+        });
       }
 
       // Reciprocal like exists → create or reactivate match (user1_id < user2_id enforced by schema)
@@ -107,7 +120,12 @@ router.post(
         sendPushToUser(likedId, 'Nouveau match !', `${req.user.name} a matché avec toi`, { match_id: matchId, type: 'new_match' });
       }
 
-      return res.status(status).json({ like_id: likeId, is_match: true, match_id: matchId });
+      return res.status(status).json({
+        like_id:       likeId,
+        is_match:      true,
+        match_id:      matchId,
+        is_speed_date: likeRow.is_speed_date === true,
+      });
     } catch (err) {
       next(err);
     }
@@ -162,6 +180,7 @@ router.get('/received', async (req, res, next) => {
          u.pet, u.alcohol, u.tobacco, u.sport,
          u.evenings_type, u.weekends_type, u.favorite_song, u.social_media, u.gender,
          l.is_super,
+         l.is_speed_date,
          l.created_at AS liked_at,
          ${haversineSQL('$2', '$3', 'u')} AS dist_km
        FROM likes l
@@ -224,7 +243,10 @@ router.get('/can-super-like', async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post(
   '/super',
-  [body('liked_id').isUUID().withMessage('liked_id must be a valid UUID')],
+  [
+    body('liked_id').isUUID().withMessage('liked_id must be a valid UUID'),
+    body('is_speed_date').optional().isBoolean().withMessage('is_speed_date must be a boolean'),
+  ],
   validate,
   async (req, res, next) => {
     const likerId = req.user.id;
@@ -253,16 +275,20 @@ router.post(
         });
       }
 
-      // 2 — Insert (or upgrade existing like to super)
+      // 2 — Insert (or upgrade existing like to super).
+      // is_speed_date is sticky: OR'd with any prior value, never downgraded.
+      const isSpeedDate = req.body.is_speed_date === true;
       const insertLike = await pool.query(
-        `INSERT INTO likes (liker_id, liked_id, is_super)
-         VALUES ($1, $2, TRUE)
+        `INSERT INTO likes (liker_id, liked_id, is_super, is_speed_date)
+         VALUES ($1, $2, TRUE, $3)
          ON CONFLICT (liker_id, liked_id) DO UPDATE
-           SET is_super = TRUE
-         RETURNING id`,
-        [likerId, likedId]
+           SET is_super      = TRUE,
+               is_speed_date = likes.is_speed_date OR EXCLUDED.is_speed_date
+         RETURNING id, is_speed_date`,
+        [likerId, likedId, isSpeedDate]
       );
-      const likeId = insertLike.rows[0].id;
+      const likeRow = insertLike.rows[0];
+      const likeId  = likeRow.id;
 
       // 3 — Consume the daily quota
       await pool.query(
@@ -279,12 +305,18 @@ router.post(
       if (reciprocal.rowCount === 0) {
         if (io) {
           io.to(`user:${likedId}`).emit('new_like', {
-            liker_id:   likerId,
-            liker_name: req.user.name,
-            is_super:   true,
+            liker_id:      likerId,
+            liker_name:    req.user.name,
+            is_super:      true,
+            is_speed_date: likeRow.is_speed_date === true,
           });
         }
-        return res.status(201).json({ like_id: likeId, is_match: false, is_super: true });
+        return res.status(201).json({
+          like_id:       likeId,
+          is_match:      false,
+          is_super:      true,
+          is_speed_date: likeRow.is_speed_date === true,
+        });
       }
 
       const insertMatch = await pool.query(
@@ -320,7 +352,13 @@ router.post(
         sendPushToUser(likedId, 'Nouveau match !', `${req.user.name} a matché avec toi`, { match_id: matchId, type: 'new_match' });
       }
 
-      return res.status(201).json({ like_id: likeId, is_match: true, match_id: matchId, is_super: true });
+      return res.status(201).json({
+        like_id:       likeId,
+        is_match:      true,
+        match_id:      matchId,
+        is_super:      true,
+        is_speed_date: likeRow.is_speed_date === true,
+      });
     } catch (err) {
       next(err);
     }
