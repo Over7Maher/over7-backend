@@ -73,7 +73,15 @@ router.get('/', async (req, res, next) => {
          last_msg.sender_id                                           AS last_message_sender_id,
 
          -- Unread count: messages sent by the other user that we haven't read yet
-         COALESCE(unread.cnt, 0)::INT                                 AS unread_count
+         COALESCE(unread.cnt, 0)::INT                                 AS unread_count,
+
+         -- Speed Date flag: TRUE if the match was created via a Speed Date like in the last 4h
+         (EXISTS (
+           SELECT 1 FROM likes l
+           WHERE l.is_speed_date = TRUE
+             AND ((l.liker_id = m.user1_id AND l.liked_id = m.user2_id)
+               OR (l.liker_id = m.user2_id AND l.liked_id = m.user1_id))
+         ) AND m.created_at > NOW() - INTERVAL '4 hours')             AS is_speed_date
 
        FROM matches m
 
