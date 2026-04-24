@@ -9,6 +9,8 @@ const router = express.Router();
 
 router.use(auth);
 
+const REGISTRATION_WINDOW_DAYS = 7;   // today + next 6 days
+
 function validate(req, res, next) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
@@ -19,6 +21,21 @@ function validate(req, res, next) {
 // formats as YYYY-MM-DD, so slicing the first 10 chars is safe.
 function todayBrussels() {
   return new Date().toLocaleString('en-CA', { timeZone: 'Europe/Brussels' }).slice(0, 10);
+}
+
+// Adds `days` calendar days to a YYYY-MM-DD string. Treats the input as UTC
+// midnight so arithmetic doesn't cross DST boundaries unintentionally.
+function addDays(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Normalizes a pg DATE result (either a JS Date or a YYYY-MM-DD string,
+// depending on pg.types config) to a plain YYYY-MM-DD string.
+function toDateStr(v) {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v).slice(0, 10);
 }
 
 // Returns the currently-active slot in Europe/Brussels, or null when outside
@@ -36,12 +53,16 @@ function getCurrentSlot() {
 }
 
 // ── POST /api/speed-date/register ────────────────────────────────────────────
-// Registers the current user to today's afternoon or evening slot.
+// Registers the current user to any slot in the next 7 days (today included).
+// body: { slot_type, slot_date? } — slot_date defaults to today (Brussels).
 // Re-registering after a cancellation reactivates the row.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post(
   '/register',
-  [body('slot_type').isIn(['afternoon', 'evening']).withMessage('slot_type must be afternoon or evening')],
+  [
+    body('slot_type').isIn(['afternoon', 'evening']).withMessage('slot_type must be afternoon or evening'),
+    body('slot_date').optional().isISO8601().withMessage('slot_date must be YYYY-MM-DD'),
+  ],
   validate,
   async (req, res, next) => {
     try {
@@ -49,7 +70,17 @@ router.post(
         return res.status(403).json({ error: 'Access to Speed Date requires pool access' });
       }
 
-      const slotDate = todayBrussels();
+      const today    = todayBrussels();
+      const maxDate  = addDays(today, REGISTRATION_WINDOW_DAYS - 1);
+      const slotDate = req.body.slot_date
+        ? String(req.body.slot_date).slice(0, 10)
+        : today;
+
+      if (slotDate < today || slotDate > maxDate) {
+        return res.status(400).json({
+          error: `slot_date must be between ${today} and ${maxDate} (inclusive)`,
+        });
+      }
 
       const { rows } = await pool.query(
         `INSERT INTO speed_date_registrations (user_id, slot_date, slot_type)
@@ -68,13 +99,16 @@ router.post(
 );
 
 // ── DELETE /api/speed-date/register ──────────────────────────────────────────
-// Cancels today's registration(s). Optional ?slot_type=afternoon|evening
-// restricts cancellation to a single slot.
+// Cancels registration(s). Query params:
+//   slot_date — optional, defaults to today (Brussels)
+//   slot_type — optional, cancels both slots for that date when absent
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete('/register', async (req, res, next) => {
   try {
     const slotType = req.query.slot_type;
-    const slotDate = todayBrussels();
+    const slotDate = req.query.slot_date
+      ? String(req.query.slot_date).slice(0, 10)
+      : todayBrussels();
 
     const params = [req.user.id, slotDate];
     let sql = `UPDATE speed_date_registrations
@@ -87,7 +121,7 @@ router.delete('/register', async (req, res, next) => {
       params.push(slotType);
       sql += ` AND slot_type = $3`;
     }
-    sql += ` RETURNING id, slot_type`;
+    sql += ` RETURNING id, slot_type, slot_date`;
 
     const { rows } = await pool.query(sql, params);
     res.json({ cancelled: rows.length, registrations: rows });
@@ -97,49 +131,95 @@ router.delete('/register', async (req, res, next) => {
 });
 
 // ── GET /api/speed-date/my-slots ─────────────────────────────────────────────
-// Lists the current user's active registrations for today, plus whether a
-// slot is running right now and whether they are registered to it.
+// Lists the current user's active registrations for the 7-day window starting
+// today, plus the running slot (if any) and whether the user is registered to it.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/my-slots', async (req, res, next) => {
   try {
-    const slotDate = todayBrussels();
+    const today   = todayBrussels();
+    const maxDate = addDays(today, REGISTRATION_WINDOW_DAYS - 1);
 
     const { rows } = await pool.query(
       `SELECT id, slot_type, slot_date, created_at
        FROM speed_date_registrations
        WHERE user_id = $1
-         AND slot_date = $2
+         AND slot_date BETWEEN $2 AND $3
          AND cancelled_at IS NULL
-       ORDER BY created_at DESC`,
-      [req.user.id, slotDate]
+       ORDER BY slot_date ASC, created_at DESC`,
+      [req.user.id, today, maxDate]
     );
 
     const current = getCurrentSlot();
     const isRegisteredNow = current
-      ? rows.some(r => r.slot_type === current.slot_type && r.slot_date === current.slot_date)
+      ? rows.some(r =>
+          r.slot_type === current.slot_type &&
+          toDateStr(r.slot_date) === current.slot_date
+        )
       : false;
 
     res.json({
-      current_slot:       current,
-      registrations:      rows,
-      is_registered_now:  isRegisteredNow,
+      current_slot:      current,
+      registrations:     rows,
+      is_registered_now: isRegisteredNow,
     });
   } catch (err) {
     next(err);
   }
 });
 
+// ── GET /api/speed-date/slots-grid ───────────────────────────────────────────
+// Returns a 7-day grid with the user's registration state per slot, for
+// rendering the frontend calendar grid.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/slots-grid', async (req, res, next) => {
+  try {
+    const today = todayBrussels();
+    const dates = Array.from(
+      { length: REGISTRATION_WINDOW_DAYS },
+      (_, i) => addDays(today, i)
+    );
+
+    const { rows: registrations } = await pool.query(
+      `SELECT slot_date, slot_type
+       FROM speed_date_registrations
+       WHERE user_id     = $1
+         AND slot_date   = ANY($2::date[])
+         AND cancelled_at IS NULL`,
+      [req.user.id, dates]
+    );
+
+    // Index by date for O(1) lookup across the 7-day grid.
+    const byDate = new Map();
+    for (const r of registrations) {
+      const d = toDateStr(r.slot_date);
+      const entry = byDate.get(d) ?? { afternoon: false, evening: false };
+      entry[r.slot_type] = true;
+      byDate.set(d, entry);
+    }
+
+    const grid = dates.map(date => ({
+      slot_date: date,
+      afternoon: byDate.get(date)?.afternoon ?? false,
+      evening:   byDate.get(date)?.evening   ?? false,
+    }));
+
+    res.json({ grid, today });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── GET /api/speed-date/profiles ─────────────────────────────────────────────
-// Profiles to swipe within the current slot: same slot registration,
-// <=20km, is_in_pool, gender/seeking reciprocity, not self/blocked/liked/matched.
+// Profiles to swipe, drawn from users registered TODAY to AT LEAST ONE of the
+// slots the current user is registered to today. Available all day (not gated
+// by the 14-18 / 19-23 windows). Profiles registered to the running slot are
+// surfaced first when one is active.
+//
+// Filters: is_in_pool, is_active, gender/seeking reciprocity, within 20 km,
+// excluding self / blocks / existing likes / active matches.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/profiles', async (req, res, next) => {
   try {
-    const current = getCurrentSlot();
-    if (!current) {
-      return res.status(400).json({ error: 'No active slot at this time' });
-    }
-
     const me = req.user;
     if (me.is_in_pool !== true) {
       return res.status(403).json({ error: 'Pool access required' });
@@ -148,29 +228,44 @@ router.get('/profiles', async (req, res, next) => {
       return res.status(400).json({ error: 'Location required' });
     }
 
-    // Current user must themselves be registered to the live slot.
-    const { rows: myReg } = await pool.query(
-      `SELECT 1 FROM speed_date_registrations
-       WHERE user_id    = $1
-         AND slot_date  = $2
-         AND slot_type  = $3
+    const today   = todayBrussels();
+    const current = getCurrentSlot();   // may be null
+
+    const { rows: mySlots } = await pool.query(
+      `SELECT slot_type FROM speed_date_registrations
+       WHERE user_id = $1
+         AND slot_date = $2
          AND cancelled_at IS NULL`,
-      [me.id, current.slot_date, current.slot_type]
+      [me.id, today]
     );
-    if (myReg.length === 0) {
-      return res.status(403).json({ error: 'You must register to the current slot first' });
+
+    if (mySlots.length === 0) {
+      return res.status(403).json({ error: "You must register to today's slots first" });
     }
 
-    const myLat     = parseFloat(me.latitude);
-    const myLng     = parseFloat(me.longitude);
-    const myGender  = me.gender ?? null;
-    const mySeeking = (me.seeking === 'male' || me.seeking === 'female') ? me.seeking : null;
+    const mySlotTypes = mySlots.map(r => r.slot_type);
+    const myLat       = parseFloat(me.latitude);
+    const myLng       = parseFloat(me.longitude);
+    const myGender    = me.gender ?? null;
+    const mySeeking   = (me.seeking === 'male' || me.seeking === 'female') ? me.seeking : null;
+    const currentType = current ? current.slot_type : '';
 
     const limit  = Math.min(parseInt(req.query.limit, 10)  || 20, 50);
     const offset = parseInt(req.query.offset, 10) || 0;
 
     const { rows } = await pool.query(
-      `WITH candidates AS (
+      `WITH profile_slots AS (
+         SELECT
+           sdr.user_id,
+           array_agg(sdr.slot_type ORDER BY sdr.slot_type) AS slot_types,
+           BOOL_OR(sdr.slot_type = $8::TEXT)               AS in_current_slot
+         FROM speed_date_registrations sdr
+         WHERE sdr.slot_date     = $4
+           AND sdr.cancelled_at IS NULL
+           AND sdr.slot_type     = ANY($5::TEXT[])
+         GROUP BY sdr.user_id
+       ),
+       candidates AS (
          SELECT
            u.id, u.name, u.birth_date, u.bio, u.city,
            u.profile_picture_url, u.photos, u.tags,
@@ -181,6 +276,8 @@ router.get('/profiles', async (req, res, next) => {
            u.evenings_type, u.weekends_type, u.favorite_song,
            u.social_media, u.gender,
            u.avg_rating, u.completude_pct,
+           ps.slot_types,
+           ps.in_current_slot,
            (
              SELECT json_agg(
                json_build_object(
@@ -196,11 +293,8 @@ router.get('/profiles', async (req, res, next) => {
            ) AS prompts,
            ${haversineSQL('$2', '$3', 'u')} AS dist_km
          FROM users u
-         INNER JOIN speed_date_registrations sdr ON sdr.user_id = u.id
-         WHERE sdr.slot_date     = $4
-           AND sdr.slot_type     = $5
-           AND sdr.cancelled_at IS NULL
-           AND u.id        != $1
+         INNER JOIN profile_slots ps ON ps.user_id = u.id
+         WHERE u.id        != $1
            AND u.is_active  = TRUE
            AND u.is_in_pool = TRUE
            AND u.latitude  IS NOT NULL
@@ -221,13 +315,14 @@ router.get('/profiles', async (req, res, next) => {
        )
        SELECT * FROM candidates
        WHERE dist_km <= 20
-       ORDER BY dist_km ASC, avg_rating DESC NULLS LAST
-       LIMIT  $8
-       OFFSET $9`,
+       ORDER BY in_current_slot DESC, dist_km ASC, avg_rating DESC NULLS LAST
+       LIMIT  $9
+       OFFSET $10`,
       [
         me.id, myLat, myLng,
-        current.slot_date, current.slot_type,
+        today, mySlotTypes,
         mySeeking, myGender,
+        currentType,
         limit, offset,
       ]
     );
@@ -235,7 +330,8 @@ router.get('/profiles', async (req, res, next) => {
     res.json({
       profiles:         rows,
       count:            rows.length,
-      slot:             current,
+      my_slots:         mySlotTypes,
+      current_slot:     current,
       offset,
       no_more_profiles: rows.length < limit,
     });
