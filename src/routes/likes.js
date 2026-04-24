@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 const haversineSQL = require('../db/haversine');
 const { notBlockedClause } = require('../db/blocks');
 const { sendPushToUser } = require('../services/push');
+const { getCurrentSlot } = require('../utils/slots');
 
 const router = express.Router();
 
@@ -86,14 +87,21 @@ router.post(
       }
 
       // Reciprocal like exists → create or reactivate match (user1_id < user2_id enforced by schema)
+      // If this like is a Speed Date like, capture the current slot so the chat can display it.
+      const currentSlot = likeRow.is_speed_date === true ? getCurrentSlot() : null;
+      const slotType = currentSlot?.slot_type ?? null;
+      const slotDate = currentSlot?.slot_date ?? null;
+
       const insertMatch = await pool.query(
-        `INSERT INTO matches (user1_id, user2_id)
-         VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid))
+        `INSERT INTO matches (user1_id, user2_id, speed_date_slot_type, speed_date_slot_date)
+         VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid), $3, $4)
          ON CONFLICT (user1_id, user2_id) DO UPDATE
            SET is_active  = TRUE,
-               created_at = CASE WHEN matches.is_active = FALSE THEN NOW() ELSE matches.created_at END
+               created_at = CASE WHEN matches.is_active = FALSE THEN NOW() ELSE matches.created_at END,
+               speed_date_slot_type = COALESCE(EXCLUDED.speed_date_slot_type, matches.speed_date_slot_type),
+               speed_date_slot_date = COALESCE(EXCLUDED.speed_date_slot_date, matches.speed_date_slot_date)
          RETURNING id, (xmax = 0) AS is_new`,
-        [likerId, likedId]
+        [likerId, likedId, slotType, slotDate]
       );
 
       const matchId = insertMatch.rows[0]?.id ?? null;
@@ -319,14 +327,21 @@ router.post(
         });
       }
 
+      // Capture the current slot if this super like is also a Speed Date like.
+      const currentSlot = likeRow.is_speed_date === true ? getCurrentSlot() : null;
+      const slotType = currentSlot?.slot_type ?? null;
+      const slotDate = currentSlot?.slot_date ?? null;
+
       const insertMatch = await pool.query(
-        `INSERT INTO matches (user1_id, user2_id)
-         VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid))
+        `INSERT INTO matches (user1_id, user2_id, speed_date_slot_type, speed_date_slot_date)
+         VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid), $3, $4)
          ON CONFLICT (user1_id, user2_id) DO UPDATE
            SET is_active  = TRUE,
-               created_at = CASE WHEN matches.is_active = FALSE THEN NOW() ELSE matches.created_at END
+               created_at = CASE WHEN matches.is_active = FALSE THEN NOW() ELSE matches.created_at END,
+               speed_date_slot_type = COALESCE(EXCLUDED.speed_date_slot_type, matches.speed_date_slot_type),
+               speed_date_slot_date = COALESCE(EXCLUDED.speed_date_slot_date, matches.speed_date_slot_date)
          RETURNING id, (xmax = 0) AS is_new`,
-        [likerId, likedId]
+        [likerId, likedId, slotType, slotDate]
       );
       const matchId = insertMatch.rows[0]?.id ?? null;
 
