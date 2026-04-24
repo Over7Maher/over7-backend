@@ -79,19 +79,13 @@ router.get('/', async (req, res, next) => {
          m.speed_date_slot_type                                       AS speed_date_slot_type,
          m.speed_date_slot_date                                       AS speed_date_slot_date,
 
-         -- Speed Date flag: TRUE only while the captured slot is still alive (Europe/Brussels time).
-         -- afternoon dies at 18h, evening dies at 23h on slot_date. Once dead, the match behaves as a normal match.
-         (
-           m.speed_date_slot_type IS NOT NULL
-           AND m.speed_date_slot_date = (NOW() AT TIME ZONE 'Europe/Brussels')::date
-           AND (
-             (m.speed_date_slot_type = 'afternoon' AND EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Europe/Brussels') < 18)
-             OR
-             (m.speed_date_slot_type = 'evening'   AND EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Europe/Brussels') < 23)
-           )
-         )                                                            AS is_speed_date,
+         -- Speed Date flag: TRUE as soon as the match was created from a Speed Date slot.
+         -- Remains TRUE forever (the badge greys out in the UI when the slot dies, but doesn't disappear).
+         (m.speed_date_slot_type IS NOT NULL)                          AS is_speed_date,
 
-         -- Alias of is_speed_date for frontend banner clarity (same computation, different semantic use).
+         -- Slot-alive flag: TRUE only while the captured slot is still within the Brussels window.
+         -- afternoon dies at 18h, evening dies at 23h on slot_date.
+         -- Used by the UI to decide between the orange (alive) and grey (past) badge/banner style.
          (
            m.speed_date_slot_type IS NOT NULL
            AND m.speed_date_slot_date = (NOW() AT TIME ZONE 'Europe/Brussels')::date
