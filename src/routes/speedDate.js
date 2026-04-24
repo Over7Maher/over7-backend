@@ -38,18 +38,35 @@ function toDateStr(v) {
   return String(v).slice(0, 10);
 }
 
+function brusselsHour() {
+  return new Date(
+    new Date().toLocaleString('en-US', { timeZone: 'Europe/Brussels' })
+  ).getHours();
+}
+
 // Returns the currently-active slot in Europe/Brussels, or null when outside
 // both windows. afternoon = [14h, 18h), evening = [19h, 23h).
 function getCurrentSlot() {
-  const brusselsNow = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Europe/Brussels' })
-  );
-  const hour = brusselsNow.getHours();
+  const hour = brusselsHour();
   const slotDate = todayBrussels();
 
   if (hour >= 14 && hour < 18) return { slot_type: 'afternoon', slot_date: slotDate };
   if (hour >= 19 && hour < 23) return { slot_type: 'evening',   slot_date: slotDate };
   return null;
+}
+
+// Returns today's slot types that have not yet ended, in Europe/Brussels.
+// A slot is "live" from 00:00 until its end hour — profiles for an upcoming
+// slot (e.g. afternoon before 14h) are still shown.
+//   hour < 18 → afternoon still alive
+//   hour < 23 → evening still alive
+// After 23h, nothing is live until tomorrow.
+function getLiveSlotsToday() {
+  const hour = brusselsHour();
+  const live = [];
+  if (hour < 18) live.push('afternoon');
+  if (hour < 23) live.push('evening');
+  return live;
 }
 
 // ── POST /api/speed-date/register ────────────────────────────────────────────
@@ -228,15 +245,27 @@ router.get('/profiles', async (req, res, next) => {
       return res.status(400).json({ error: 'Location required' });
     }
 
-    const today   = todayBrussels();
-    const current = getCurrentSlot();   // may be null
+    const today     = todayBrussels();
+    const current   = getCurrentSlot();       // may be null
+    const liveSlots = getLiveSlotsToday();    // [] after 23h Brussels
 
+    if (liveSlots.length === 0) {
+      return res.status(403).json({
+        error:      "All today's Speed Date slots have expired. Come back tomorrow.",
+        live_slots: [],
+      });
+    }
+
+    // Only count the user's registrations on slots that haven't ended yet —
+    // an afternoon registration stops contributing at 18h even if evening is
+    // still live.
     const { rows: mySlots } = await pool.query(
       `SELECT slot_type FROM speed_date_registrations
        WHERE user_id = $1
          AND slot_date = $2
+         AND slot_type = ANY($3::TEXT[])
          AND cancelled_at IS NULL`,
-      [me.id, today]
+      [me.id, today, liveSlots]
     );
 
     if (mySlots.length === 0) {
@@ -331,6 +360,7 @@ router.get('/profiles', async (req, res, next) => {
       profiles:         rows,
       count:            rows.length,
       my_slots:         mySlotTypes,
+      live_slots:       liveSlots,
       current_slot:     current,
       offset,
       no_more_profiles: rows.length < limit,
