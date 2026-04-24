@@ -66,12 +66,11 @@ router.get(
              m.match_id,
              m.sender_id,
              m.content,
-             m.type,
              m.read_at,
              m.created_at,
              u.name AS sender_name
            FROM messages m
-           LEFT JOIN users u ON u.id = m.sender_id
+           JOIN users u ON u.id = m.sender_id
            WHERE m.match_id = $1
            ORDER BY m.created_at DESC
            LIMIT $2`,
