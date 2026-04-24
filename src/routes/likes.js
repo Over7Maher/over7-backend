@@ -56,6 +56,13 @@ async function getCommonSlotToday(userAId, userBId) {
   return null;
 }
 
+// Returns the end-of-slot label for a Speed Date slot type ("18h00", "23h00", or "").
+function slotEndLabel(slotType) {
+  if (slotType === 'afternoon') return '18h00';
+  if (slotType === 'evening')   return '23h00';
+  return '';
+}
+
 function computeNextMidnightBrussels() {
   const now = new Date();
   const brusselsDate = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Brussels' }));
@@ -174,8 +181,18 @@ router.post(
           other_name: req.user.name,
         });
 
-        sendPushToUser(likerId, 'Nouveau match !', `${likedName} a matché avec toi`, { match_id: matchId, type: 'new_match' });
-        sendPushToUser(likedId, 'Nouveau match !', `${req.user.name} a matché avec toi`, { match_id: matchId, type: 'new_match' });
+        // Enriched push for Speed Date matches (slotType captured above is non-null only when alive).
+        const isSpeedDateAlive = slotType !== null;
+        const pushTitle = isSpeedDateAlive
+          ? (name) => `⚡ Match Speed Date avec ${name} !`
+          : (name) => `Nouveau match !`;
+        const pushBody = isSpeedDateAlive
+          ? () => `Vous avez jusqu'à ${slotEndLabel(slotType)} pour vous rencontrer !`
+          : (name) => `${name} a matché avec toi`;
+        const pushType = isSpeedDateAlive ? 'speed_date_match' : 'new_match';
+
+        sendPushToUser(likerId, pushTitle(likedName),     pushBody(likedName),     { match_id: matchId, type: pushType });
+        sendPushToUser(likedId, pushTitle(req.user.name), pushBody(req.user.name), { match_id: matchId, type: pushType });
       }
 
       return res.status(status).json({
@@ -437,8 +454,18 @@ router.post(
           other_name: req.user.name,
         });
 
-        sendPushToUser(likerId, 'Nouveau match !', `${likedName} a matché avec toi`, { match_id: matchId, type: 'new_match' });
-        sendPushToUser(likedId, 'Nouveau match !', `${req.user.name} a matché avec toi`, { match_id: matchId, type: 'new_match' });
+        // Enriched push for Speed Date matches (slotType captured above is non-null only when alive).
+        const isSpeedDateAlive = slotType !== null;
+        const pushTitle = isSpeedDateAlive
+          ? (name) => `⚡ Match Speed Date avec ${name} !`
+          : (name) => `Nouveau match !`;
+        const pushBody = isSpeedDateAlive
+          ? () => `Vous avez jusqu'à ${slotEndLabel(slotType)} pour vous rencontrer !`
+          : (name) => `${name} a matché avec toi`;
+        const pushType = isSpeedDateAlive ? 'speed_date_match' : 'new_match';
+
+        sendPushToUser(likerId, pushTitle(likedName),     pushBody(likedName),     { match_id: matchId, type: pushType });
+        sendPushToUser(likedId, pushTitle(req.user.name), pushBody(req.user.name), { match_id: matchId, type: pushType });
       }
 
       return res.status(201).json({
