@@ -105,6 +105,17 @@ router.post(
       );
 
       const matchId = insertMatch.rows[0]?.id ?? null;
+      const matchIsNew = insertMatch.rows[0]?.is_new === true;
+
+      // Speed Date match → insert a one-time system message inviting them to pick a spot.
+      // Only on NEW matches (not on reactivation of an old match), and only if the slot was captured.
+      if (matchId && matchIsNew && currentSlot) {
+        await pool.query(
+          `INSERT INTO messages (match_id, sender_id, content, type)
+           VALUES ($1, NULL, $2, 'system')`,
+          [matchId, '⚡ Vous avez matché pendant un Speed Date. Proposez un lieu !']
+        );
+      }
 
       if (io && matchId) {
         const { rows: likedRows } = await pool.query(
@@ -344,6 +355,16 @@ router.post(
         [likerId, likedId, slotType, slotDate]
       );
       const matchId = insertMatch.rows[0]?.id ?? null;
+      const matchIsNew = insertMatch.rows[0]?.is_new === true;
+
+      // Speed Date match → insert a one-time system message inviting them to pick a spot.
+      if (matchId && matchIsNew && currentSlot) {
+        await pool.query(
+          `INSERT INTO messages (match_id, sender_id, content, type)
+           VALUES ($1, NULL, $2, 'system')`,
+          [matchId, '⚡ Vous avez matché pendant un Speed Date. Proposez un lieu !']
+        );
+      }
 
       if (io && matchId) {
         const { rows: likedRows } = await pool.query(
