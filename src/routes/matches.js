@@ -75,17 +75,32 @@ router.get('/', async (req, res, next) => {
          -- Unread count: messages sent by the other user that we haven't read yet
          COALESCE(unread.cnt, 0)::INT                                 AS unread_count,
 
-         -- Speed Date flag: TRUE if the match was created via a Speed Date like in the last 4h
-         (EXISTS (
-           SELECT 1 FROM likes l
-           WHERE l.is_speed_date = TRUE
-             AND ((l.liker_id = m.user1_id AND l.liked_id = m.user2_id)
-               OR (l.liker_id = m.user2_id AND l.liked_id = m.user1_id))
-         ) AND m.created_at > NOW() - INTERVAL '4 hours')             AS is_speed_date,
-
          -- Speed Date slot captured at match creation (for chat banner display)
          m.speed_date_slot_type                                       AS speed_date_slot_type,
-         m.speed_date_slot_date                                       AS speed_date_slot_date
+         m.speed_date_slot_date                                       AS speed_date_slot_date,
+
+         -- Speed Date flag: TRUE only while the captured slot is still alive (Europe/Brussels time).
+         -- afternoon dies at 18h, evening dies at 23h on slot_date. Once dead, the match behaves as a normal match.
+         (
+           m.speed_date_slot_type IS NOT NULL
+           AND m.speed_date_slot_date = (NOW() AT TIME ZONE 'Europe/Brussels')::date
+           AND (
+             (m.speed_date_slot_type = 'afternoon' AND EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Europe/Brussels') < 18)
+             OR
+             (m.speed_date_slot_type = 'evening'   AND EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Europe/Brussels') < 23)
+           )
+         )                                                            AS is_speed_date,
+
+         -- Alias of is_speed_date for frontend banner clarity (same computation, different semantic use).
+         (
+           m.speed_date_slot_type IS NOT NULL
+           AND m.speed_date_slot_date = (NOW() AT TIME ZONE 'Europe/Brussels')::date
+           AND (
+             (m.speed_date_slot_type = 'afternoon' AND EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Europe/Brussels') < 18)
+             OR
+             (m.speed_date_slot_type = 'evening'   AND EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Europe/Brussels') < 23)
+           )
+         )                                                            AS speed_date_slot_alive
 
        FROM matches m
 

@@ -66,8 +66,9 @@ router.post(
 
       // Check for reciprocal like even if the like already existed —
       // the match may not have been created on the original insert.
+      // We also fetch is_speed_date so we know if either side of the match came from Speed Date.
       const reciprocal = await pool.query(
-        `SELECT 1 FROM likes WHERE liker_id = $1 AND liked_id = $2`,
+        `SELECT is_speed_date FROM likes WHERE liker_id = $1 AND liked_id = $2`,
         [likedId, likerId]
       );
 
@@ -87,8 +88,11 @@ router.post(
       }
 
       // Reciprocal like exists → create or reactivate match (user1_id < user2_id enforced by schema)
-      // If this like is a Speed Date like, capture the current slot so the chat can display it.
-      const currentSlot = likeRow.is_speed_date === true ? getCurrentSlot() : null;
+      // If EITHER like is a Speed Date like AND we are currently in a Speed Date slot,
+      // capture the current slot so the chat can display the banner.
+      const reciprocalIsSpeedDate = reciprocal.rows[0]?.is_speed_date === true;
+      const eitherIsSpeedDate = likeRow.is_speed_date === true || reciprocalIsSpeedDate;
+      const currentSlot = eitherIsSpeedDate ? getCurrentSlot() : null;
       const slotType = currentSlot?.slot_type ?? null;
       const slotDate = currentSlot?.slot_date ?? null;
 
@@ -306,7 +310,7 @@ router.post(
 
       // 4 — Reciprocal like → create or reactivate match
       const reciprocal = await pool.query(
-        `SELECT 1 FROM likes WHERE liker_id = $1 AND liked_id = $2`,
+        `SELECT is_speed_date FROM likes WHERE liker_id = $1 AND liked_id = $2`,
         [likedId, likerId]
       );
 
@@ -327,8 +331,10 @@ router.post(
         });
       }
 
-      // Capture the current slot if this super like is also a Speed Date like.
-      const currentSlot = likeRow.is_speed_date === true ? getCurrentSlot() : null;
+      // Capture the current slot if EITHER like is a Speed Date like AND we're currently in a slot.
+      const reciprocalIsSpeedDate = reciprocal.rows[0]?.is_speed_date === true;
+      const eitherIsSpeedDate = likeRow.is_speed_date === true || reciprocalIsSpeedDate;
+      const currentSlot = eitherIsSpeedDate ? getCurrentSlot() : null;
       const slotType = currentSlot?.slot_type ?? null;
       const slotDate = currentSlot?.slot_date ?? null;
 
