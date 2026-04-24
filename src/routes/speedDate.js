@@ -4,6 +4,7 @@ const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const haversineSQL = require('../db/haversine');
 const { notBlockedClause } = require('../db/blocks');
+const { todayBrussels, brusselsHour, addDays, getCurrentSlot, getLiveSlotsToday } = require('../utils/slots');
 
 const router = express.Router();
 
@@ -17,56 +18,11 @@ function validate(req, res, next) {
   next();
 }
 
-// Returns today's YYYY-MM-DD in Europe/Brussels. 'en-CA' locale conveniently
-// formats as YYYY-MM-DD, so slicing the first 10 chars is safe.
-function todayBrussels() {
-  return new Date().toLocaleString('en-CA', { timeZone: 'Europe/Brussels' }).slice(0, 10);
-}
-
-// Adds `days` calendar days to a YYYY-MM-DD string. Treats the input as UTC
-// midnight so arithmetic doesn't cross DST boundaries unintentionally.
-function addDays(dateStr, days) {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 // Normalizes a pg DATE result (either a JS Date or a YYYY-MM-DD string,
 // depending on pg.types config) to a plain YYYY-MM-DD string.
 function toDateStr(v) {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   return String(v).slice(0, 10);
-}
-
-function brusselsHour() {
-  return new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Europe/Brussels' })
-  ).getHours();
-}
-
-// Returns the currently-active slot in Europe/Brussels, or null when outside
-// both windows. afternoon = [14h, 18h), evening = [19h, 23h).
-function getCurrentSlot() {
-  const hour = brusselsHour();
-  const slotDate = todayBrussels();
-
-  if (hour >= 14 && hour < 18) return { slot_type: 'afternoon', slot_date: slotDate };
-  if (hour >= 19 && hour < 23) return { slot_type: 'evening',   slot_date: slotDate };
-  return null;
-}
-
-// Returns today's slot types that have not yet ended, in Europe/Brussels.
-// A slot is "live" from 00:00 until its end hour — profiles for an upcoming
-// slot (e.g. afternoon before 14h) are still shown.
-//   hour < 18 → afternoon still alive
-//   hour < 23 → evening still alive
-// After 23h, nothing is live until tomorrow.
-function getLiveSlotsToday() {
-  const hour = brusselsHour();
-  const live = [];
-  if (hour < 18) live.push('afternoon');
-  if (hour < 23) live.push('evening');
-  return live;
 }
 
 // ── POST /api/speed-date/register ────────────────────────────────────────────
