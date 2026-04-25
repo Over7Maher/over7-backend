@@ -63,10 +63,12 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- New columns added after initial migration (ADD COLUMN IF NOT EXISTS is idempotent)
-ALTER TABLE users ADD COLUMN IF NOT EXISTS gender          TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS social_media    TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS photos          TEXT[]   DEFAULT '{}';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS completude_pct  SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS gender           TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS social_media     TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS photos           TEXT[]    DEFAULT '{}';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS completude_pct   SMALLINT  NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at       TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS arena_intro_seen BOOLEAN   NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users (firebase_uid);
 CREATE INDEX IF NOT EXISTS idx_users_is_in_pool   ON users (is_in_pool) WHERE is_in_pool = TRUE;

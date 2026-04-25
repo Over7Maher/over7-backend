@@ -99,13 +99,44 @@ router.post(
     const distance_max = req.body.distance_max ?? null;
 
     try {
-      // Idempotent: return existing user if firebase_uid already registered
+      // Idempotent: return existing user if firebase_uid already registered.
+      // If the account is soft-deleted within the 30-day grace period, reactivate it.
       const existing = await pool.query(
         'SELECT * FROM users WHERE firebase_uid = $1',
         [firebase_uid]
       );
+
       if (existing.rows.length > 0) {
-        return res.status(200).json(formatUser(existing.rows[0]));
+        const row = existing.rows[0];
+
+        if (row.is_active) {
+          return res.status(200).json(formatUser(row));
+        }
+
+        // Soft-deleted: reactivate if still within the 30-day window.
+        const within30Days =
+          row.deleted_at &&
+          (Date.now() - new Date(row.deleted_at).getTime()) < 30 * 24 * 60 * 60 * 1000;
+
+        if (within30Days) {
+          const { rows: reactivated } = await pool.query(
+            `UPDATE users
+             SET is_active = TRUE, deleted_at = NULL
+             WHERE id = $1
+             RETURNING *`,
+            [row.id]
+          );
+          console.log('[users] reactivate:', row.id);
+          return res.status(200).json(formatUser(reactivated[0]));
+        }
+
+        // Grace period expired: hard-delete the stale row before INSERT.
+        // All FKs pointing to users(id) have ON DELETE CASCADE, verified via
+        // information_schema. This cascades into arena_votes, blocks, likes,
+        // matches, messages, reports, speed_date_registrations, user_prompts.
+        await pool.query('DELETE FROM users WHERE id = $1', [row.id]);
+        console.log('[users] expired grace period, hard-delete:', row.id);
+        // Falls through to INSERT below.
       }
 
       const id = uuidv4();
@@ -385,6 +416,31 @@ router.post('/me/acknowledge-arena-intro', auth, async (req, res, next) => {
       `UPDATE users SET arena_intro_seen = TRUE WHERE id = $1`,
       [req.user.id]
     );
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── DELETE /users/me ──────────────────────────────────────────────────────────
+// RGPD-compliant soft delete. The auth middleware already filters out
+// is_active = FALSE rows, so the account becomes inaccessible immediately.
+// A 30-day grace period allows reactivation via POST /users/register before
+// a downstream cron permanently purges the row.
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete('/me', auth, async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET is_active = FALSE, deleted_at = NOW()
+       WHERE id = $1 AND is_active = TRUE
+       RETURNING id`,
+      [req.user.id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found or already deleted' });
+    }
+    console.log('[users] soft delete:', req.user.id);
     res.status(204).end();
   } catch (err) {
     next(err);
