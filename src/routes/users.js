@@ -353,6 +353,32 @@ router.patch(
       return res.status(400).json({ error: 'No valid fields provided' });
     }
 
+    // Auto-initialize matching filters on first birth_date assignment.
+    // Triggers only when the user has none of the three filters set yet,
+    // preserving any manual override the user may have done later.
+    const hasNoFilters =
+      req.user.age_min      == null &&
+      req.user.age_max      == null &&
+      req.user.distance_max == null;
+
+    if (updates.birth_date && hasNoFilters) {
+      const birth = new Date(updates.birth_date);
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+
+      if (updates.age_min      === undefined) updates.age_min      = Math.max(18, age - 10);
+      if (updates.age_max      === undefined) updates.age_max      = Math.min(70, age + 20);
+      if (updates.distance_max === undefined) updates.distance_max = 50;
+
+      console.log('[users] auto-init matching filters for', req.user.id,
+                  'age=' + age,
+                  'min=' + updates.age_min,
+                  'max=' + updates.age_max,
+                  'dist=' + updates.distance_max);
+    }
+
     // Prompts count is needed for the completude bonus (+3 per prompt, max 5)
     const { rows: promptRows } = await pool.query(
       `SELECT COUNT(*)::INT AS count FROM user_prompts WHERE user_id = $1`,
