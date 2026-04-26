@@ -7,7 +7,15 @@ async function sendPush(pushToken, title, body, data = {}) {
     await fetch(EXPO_PUSH_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: pushToken, title, body, data, sound: 'default' }),
+      body: JSON.stringify({
+        to:        pushToken,
+        title,
+        body,
+        data,
+        sound:     'default',
+        priority:  'high',
+        channelId: 'default',
+      }),
     });
   } catch (err) {
     console.error('[push] sendPush error:', err.message);
