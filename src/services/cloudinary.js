@@ -22,7 +22,7 @@ function uploadPhoto(fileBuffer, userId) {
         resource_type:  'image',
         format:         'webp',
         transformation: [
-          { width: 800, height: 800, crop: 'fill', gravity: 'auto' },
+          { width: 800, height: 800, crop: 'limit' },
         ],
       },
       (error, result) => {
