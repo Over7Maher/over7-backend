@@ -137,7 +137,7 @@ router.post(
           match_id: matchId,
         });
 
-        sendPushToUser(otherUserId, req.user.name, message.content, { match_id: matchId, type: 'new_message' });
+        sendPushToUser(otherUserId, req.user.name, message.content, { match_id: matchId, type: 'new_message' }, 'message');
       }
 
       res.status(201).json(message);

@@ -132,6 +132,13 @@ router.post(
             liker_name:    req.user.name,
             is_speed_date: likeRow.is_speed_date === true,
           });
+          sendPushToUser(
+            likedId,
+            "Quelqu'un t'a aimé(e) ✨",
+            "Découvre qui c'est",
+            { type: 'new_like' },
+            'like'
+          );
         }
         return res.status(status).json({
           like_id:       likeId,
@@ -190,9 +197,10 @@ router.post(
           ? () => `Vous avez jusqu'à ${slotEndLabel(slotType)} pour vous rencontrer !`
           : (name) => `${name} a matché avec toi`;
         const pushType = isSpeedDateAlive ? 'speed_date_match' : 'new_match';
+        const pushCategory = isSpeedDateAlive ? 'speed_date' : 'match';
 
-        sendPushToUser(likerId, pushTitle(likedName),     pushBody(likedName),     { match_id: matchId, type: pushType });
-        sendPushToUser(likedId, pushTitle(req.user.name), pushBody(req.user.name), { match_id: matchId, type: pushType });
+        sendPushToUser(likerId, pushTitle(likedName),     pushBody(likedName),     { match_id: matchId, type: pushType }, pushCategory);
+        sendPushToUser(likedId, pushTitle(req.user.name), pushBody(req.user.name), { match_id: matchId, type: pushType }, pushCategory);
       }
 
       return res.status(status).json({
@@ -407,6 +415,13 @@ router.post(
             is_super:      true,
             is_speed_date: likeRow.is_speed_date === true,
           });
+          sendPushToUser(
+            likedId,
+            "Quelqu'un t'a SUPER liké ⭐",
+            "Découvre qui c'est",
+            { type: 'new_like', is_super: true },
+            'like'
+          );
         }
         return res.status(201).json({
           like_id:       likeId,
@@ -463,9 +478,10 @@ router.post(
           ? () => `Vous avez jusqu'à ${slotEndLabel(slotType)} pour vous rencontrer !`
           : (name) => `${name} a matché avec toi`;
         const pushType = isSpeedDateAlive ? 'speed_date_match' : 'new_match';
+        const pushCategory = isSpeedDateAlive ? 'speed_date' : 'match';
 
-        sendPushToUser(likerId, pushTitle(likedName),     pushBody(likedName),     { match_id: matchId, type: pushType });
-        sendPushToUser(likedId, pushTitle(req.user.name), pushBody(req.user.name), { match_id: matchId, type: pushType });
+        sendPushToUser(likerId, pushTitle(likedName),     pushBody(likedName),     { match_id: matchId, type: pushType }, pushCategory);
+        sendPushToUser(likedId, pushTitle(req.user.name), pushBody(req.user.name), { match_id: matchId, type: pushType }, pushCategory);
       }
 
       return res.status(201).json({

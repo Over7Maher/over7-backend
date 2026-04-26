@@ -67,6 +67,8 @@ function formatUser(row) {
     pool_unlocked_at:        row.pool_unlocked_at,
     arena_intro_seen:        row.arena_intro_seen,
 
+    notification_preferences: row.notification_preferences,
+
     created_at:              row.created_at,
   };
 }
@@ -267,6 +269,46 @@ router.patch(
         [req.body.token.trim(), req.user.id]
       );
       res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ── PATCH /users/me/notification-preferences ─────────────────────────────────
+// Body: { preferences: { match?: bool, message?: bool, speed_date?: bool, like?: bool } }
+// Partial update: keys absent from the body keep their current value.
+// Unknown keys or non-boolean values are silently dropped.
+// ─────────────────────────────────────────────────────────────────────────────
+const NOTIF_PREF_KEYS = ['match', 'message', 'speed_date', 'like'];
+
+router.patch(
+  '/me/notification-preferences',
+  auth,
+  async (req, res, next) => {
+    const incoming = req.body?.preferences;
+    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+      return res.status(400).json({ error: 'preferences object is required' });
+    }
+
+    const filtered = Object.fromEntries(
+      Object.entries(incoming).filter(
+        ([k, v]) => NOTIF_PREF_KEYS.includes(k) && typeof v === 'boolean'
+      )
+    );
+    if (Object.keys(filtered).length === 0) {
+      return res.status(400).json({ error: 'No valid preferences provided' });
+    }
+
+    try {
+      const { rows } = await pool.query(
+        `UPDATE users
+            SET notification_preferences = notification_preferences || $1::jsonb
+          WHERE id = $2
+          RETURNING notification_preferences`,
+        [JSON.stringify(filtered), req.user.id]
+      );
+      res.json({ preferences: rows[0].notification_preferences });
     } catch (err) {
       next(err);
     }
