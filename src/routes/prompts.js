@@ -4,6 +4,7 @@ const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const { calculateCompletude } = require('../services/completude');
 const { shouldBeInPool } = require('../services/poolGate');
+const { handlePoolTransition } = require('../services/poolTransition');
 const formatUser = require('../utils/formatUser');
 
 const router = express.Router();
@@ -103,15 +104,13 @@ router.put(
 
       await client.query('COMMIT');
 
-      if (!wasInPool && newInPool) {
-        const io = req.app.get('io');
-        io.to(`user:${userId}`).emit('pool_unlocked');
-        await pool.query(
-          `UPDATE users SET pool_unlocked_pending = TRUE, pool_unlocked_at = NOW()
-           WHERE id = $1 AND pool_unlocked_at IS NULL`,
-          [userId]
-        );
-      }
+      await handlePoolTransition({
+        io:            req.app.get('io'),
+        userId,
+        wasInPool,
+        isInPool:      newInPool,
+        completudePct: newPct,
+      });
 
       res.json(formatUser(updatedRows[0]));
     } catch (err) {

@@ -57,6 +57,9 @@ router.get(
   async (req, res, next) => {
     const me = req.user;
 
+    if (me.is_in_pool !== true) {
+      return res.status(403).json({ error: 'Pool access required' });
+    }
     if (me.latitude == null || me.longitude == null) {
       return res.status(400).json({ error: 'Location required to discover profiles' });
     }

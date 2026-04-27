@@ -5,6 +5,7 @@ const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const { calculateCompletude, completudeBreakdown } = require('../services/completude');
 const { shouldBeInPool } = require('../services/poolGate');
+const { handlePoolTransition } = require('../services/poolTransition');
 const formatUser = require('../utils/formatUser');
 
 const router = express.Router();
@@ -409,15 +410,13 @@ router.patch(
         `UPDATE users SET ${set} WHERE id = $${keys.length + 1} RETURNING *`,
         [...values, req.user.id]
       );
-      if (!wasInPool && newIsInPool) {
-        const io = req.app.get('io');
-        io.to(`user:${req.user.id}`).emit('pool_unlocked');
-        await pool.query(
-          `UPDATE users SET pool_unlocked_pending = TRUE, pool_unlocked_at = NOW()
-           WHERE id = $1 AND pool_unlocked_at IS NULL`,
-          [req.user.id]
-        );
-      }
+      await handlePoolTransition({
+        io:            req.app.get('io'),
+        userId:        req.user.id,
+        wasInPool,
+        isInPool:      newIsInPool,
+        completudePct: updates.completude_pct,
+      });
       res.json(formatUser(rows[0]));
     } catch (err) {
       next(err);
@@ -432,6 +431,21 @@ router.post('/me/acknowledge-pool-unlock', auth, async (req, res, next) => {
   try {
     await pool.query(
       `UPDATE users SET pool_unlocked_pending = FALSE WHERE id = $1`,
+      [req.user.id]
+    );
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /users/me/acknowledge-pool-exit ──────────────────────────────────────
+// Called after the user dismisses the "you've left the pool" banner.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/me/acknowledge-pool-exit', auth, async (req, res, next) => {
+  try {
+    await pool.query(
+      `UPDATE users SET pool_exit_pending = FALSE WHERE id = $1`,
       [req.user.id]
     );
     res.status(204).end();

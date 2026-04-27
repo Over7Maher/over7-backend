@@ -4,6 +4,7 @@ const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const { notBlockedClause } = require('../db/blocks');
 const { shouldBeInPool } = require('../services/poolGate');
+const { handlePoolTransition } = require('../services/poolTransition');
 
 const router = express.Router();
 
@@ -175,22 +176,20 @@ router.post(
         new_votes_received: votedRows[0].arena_votes_received,
       });
 
-      if (!voterWasInPool && newIsInPool) {
-        io.to(`user:${voter_id}`).emit('pool_unlocked');
-        await pool.query(
-          `UPDATE users SET pool_unlocked_pending = TRUE, pool_unlocked_at = NOW()
-           WHERE id = $1 AND pool_unlocked_at IS NULL`,
-          [voter_id]
-        );
-      }
-      if (!votedWasInPool && votedNewIsInPool) {
-        io.to(`user:${voted_id}`).emit('pool_unlocked');
-        await pool.query(
-          `UPDATE users SET pool_unlocked_pending = TRUE, pool_unlocked_at = NOW()
-           WHERE id = $1 AND pool_unlocked_at IS NULL`,
-          [voted_id]
-        );
-      }
+      await handlePoolTransition({
+        io,
+        userId:        voter_id,
+        wasInPool:     voterWasInPool,
+        isInPool:      newIsInPool,
+        completudePct: voterRows[0].completude_pct,
+      });
+      await handlePoolTransition({
+        io,
+        userId:        voted_id,
+        wasInPool:     votedWasInPool,
+        isInPool:      votedNewIsInPool,
+        completudePct: votedRows[0].completude_pct,
+      });
 
       const { arena_votes_given } = voterRows[0];
 

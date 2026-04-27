@@ -49,6 +49,8 @@ function formatUser(row) {
     avg_rating:              row.avg_rating,
     pool_unlocked_pending:   row.pool_unlocked_pending,
     pool_unlocked_at:        row.pool_unlocked_at,
+    pool_exit_pending:       row.pool_exit_pending,
+    pool_exited_at:          row.pool_exited_at,
     arena_intro_seen:        row.arena_intro_seen,
 
     notification_preferences: row.notification_preferences,
