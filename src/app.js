@@ -12,6 +12,13 @@ const errorHandler = require('./middleware/errorHandler');
 const app    = express();
 const server = http.createServer(app);
 
+// Railway runs the API behind a reverse proxy. Tell Express to trust the
+// X-Forwarded-* headers so express-rate-limit can correctly identify clients
+// by their real IP. Use 1 (single hop) rather than true to avoid trusting
+// arbitrary upstream proxies — true would let clients spoof X-Forwarded-For
+// and bypass rate limits.
+app.set('trust proxy', 1);
+
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 // initSocket attaches Socket.io to the HTTP server and returns the io instance.
 // Routes access it via req.app.get('io') to broadcast after HTTP POSTs.
