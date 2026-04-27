@@ -156,3 +156,22 @@ DO $$ BEGIN
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BUG REPORTS
+-- In-app bug reports submitted from Settings → "Signaler un bug".
+-- user_id is nullable + ON DELETE SET NULL so reports survive account deletion.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bug_reports (
+  id           SERIAL PRIMARY KEY,
+  user_id      UUID REFERENCES users(id) ON DELETE SET NULL,
+  action       TEXT NOT NULL,
+  description  TEXT NOT NULL,
+  device_info  TEXT,
+  os_info      TEXT,
+  app_version  TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bug_reports_created_at
+  ON bug_reports (created_at DESC);

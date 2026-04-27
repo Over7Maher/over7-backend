@@ -98,6 +98,7 @@ app.use('/api/upload',  require('./routes/upload'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/blocks',  require('./routes/blocks'));
 app.use('/api/speed-date', require('./routes/speedDate'));
+app.use('/api/bug-reports', require('./routes/bug-reports'));
 app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
