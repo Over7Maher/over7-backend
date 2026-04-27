@@ -70,7 +70,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS completude_pct   SMALLINT  NOT NULL D
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at       TIMESTAMP;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS arena_intro_seen BOOLEAN   NOT NULL DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL
-  DEFAULT '{"match":true,"message":true,"speed_date":true,"like":true}'::jsonb;
+  DEFAULT '{"match":true,"message":true,"speed_date":true,"like":true,"arena_milestone":true}'::jsonb;
 
 -- Pool transition tracking (entry + exit). The first two already exist in production
 -- (added via ad-hoc migrations) but were missing from this schema, so a from-scratch
@@ -80,6 +80,17 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_unlocked_at      TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exited_at        TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exit_pending     BOOLEAN     DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exit_reason      TEXT;
+
+-- Arena validation tracking. arena_votes_received exists in production
+-- (added through ad-hoc migrations historically) but was missing from
+-- this schema, so a from-scratch DB rebuild would have broken anything
+-- reading it. The arena_validated_* trio is new for the validation
+-- milestone (votes_received >= 20 AND avg_rating >= 7), mirror of the
+-- pool_unlocked_* pattern.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS arena_votes_received    INTEGER     NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS arena_validated         BOOLEAN     NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS arena_validated_at      TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS arena_validated_pending BOOLEAN     NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users (firebase_uid);
 CREATE INDEX IF NOT EXISTS idx_users_is_in_pool   ON users (is_in_pool) WHERE is_in_pool = TRUE;
