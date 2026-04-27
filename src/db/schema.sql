@@ -79,6 +79,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_unlocked_pending BOOLEAN     DEF
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_unlocked_at      TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exited_at        TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exit_pending     BOOLEAN     DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exit_reason      TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users (firebase_uid);
 CREATE INDEX IF NOT EXISTS idx_users_is_in_pool   ON users (is_in_pool) WHERE is_in_pool = TRUE;

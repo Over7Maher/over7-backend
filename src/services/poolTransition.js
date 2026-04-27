@@ -19,11 +19,15 @@ async function handlePoolTransition({ io, userId, wasInPool, isInPool, completud
   if (!wasInPool && isInPool) {
     io?.to(`user:${userId}`).emit('pool_unlocked');
 
+    // pool_unlocked_at is one-time (first-unlock celebration only) — preserved
+    // via COALESCE on subsequent re-entries. pool_exit_reason cleared so a
+    // stale reason from a previous exit doesn't leak into the next cycle.
     await pool.query(
       `UPDATE users
           SET pool_unlocked_pending = TRUE,
-              pool_unlocked_at      = NOW()
-        WHERE id = $1 AND pool_unlocked_at IS NULL`,
+              pool_unlocked_at      = COALESCE(pool_unlocked_at, NOW()),
+              pool_exit_reason      = NULL
+        WHERE id = $1`,
       [userId]
     );
     return;
@@ -46,9 +50,10 @@ async function handlePoolTransition({ io, userId, wasInPool, isInPool, completud
     await pool.query(
       `UPDATE users
           SET pool_exited_at    = NOW(),
-              pool_exit_pending = TRUE
+              pool_exit_pending = TRUE,
+              pool_exit_reason  = $2
         WHERE id = $1`,
-      [userId]
+      [userId, reason]
     );
 
     // No push notification here: the user is in-app when this fires (an active
