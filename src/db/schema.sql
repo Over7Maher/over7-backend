@@ -72,6 +72,14 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS arena_intro_seen BOOLEAN   NOT NULL D
 ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL
   DEFAULT '{"match":true,"message":true,"speed_date":true,"like":true}'::jsonb;
 
+-- Pool transition tracking (entry + exit). The first two already exist in production
+-- (added via ad-hoc migrations) but were missing from this schema, so a from-scratch
+-- DB rebuild would have broken any code reading them.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_unlocked_pending BOOLEAN     DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_unlocked_at      TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exited_at        TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exit_pending     BOOLEAN     DEFAULT FALSE;
+
 CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users (firebase_uid);
 CREATE INDEX IF NOT EXISTS idx_users_is_in_pool   ON users (is_in_pool) WHERE is_in_pool = TRUE;
 
