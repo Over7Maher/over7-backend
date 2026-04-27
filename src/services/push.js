@@ -4,7 +4,7 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 async function sendPush(pushToken, title, body, data = {}) {
   try {
-    await fetch(EXPO_PUSH_URL, {
+    const res = await fetch(EXPO_PUSH_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -17,8 +17,29 @@ async function sendPush(pushToken, title, body, data = {}) {
         channelId: 'default',
       }),
     });
+
+    const json = await res.json().catch(() => null);
+    const ticket = Array.isArray(json?.data) ? json.data[0] : json?.data;
+
+    if (!ticket) {
+      console.error('[push] unexpected Expo response:', json);
+      return { ok: false, code: 'unexpected_response' };
+    }
+
+    if (ticket.status === 'error') {
+      const code = ticket.details?.error || 'unknown_error';
+      console.error('[push] Expo error:', {
+        code,
+        message: ticket.message,
+        token:   pushToken.slice(0, 30) + '…',
+      });
+      return { ok: false, code, message: ticket.message };
+    }
+
+    return { ok: true, ticketId: ticket.id };
   } catch (err) {
-    console.error('[push] sendPush error:', err.message);
+    console.error('[push] sendPush network error:', err.message);
+    return { ok: false, code: 'network_error', message: err.message };
   }
 }
 
@@ -35,7 +56,23 @@ async function sendPushToUser(userId, title, body, data = {}, category = null) {
       console.log(`[push] skipped ${category} for user ${userId} (opt-out)`);
       return;
     }
-    await sendPush(token, title, body, data);
+
+    const result = await sendPush(token, title, body, data);
+
+    if (!result.ok && result.code === 'DeviceNotRegistered') {
+      // Token is stale (uninstall, push permission revoked, app reset).
+      // The AND push_token = $2 guard avoids clobbering a fresh token the user
+      // may have registered between the failed push and this nullify.
+      try {
+        await pool.query(
+          `UPDATE users SET push_token = NULL WHERE id = $1 AND push_token = $2`,
+          [userId, token]
+        );
+        console.log('[push] cleared invalid token for user', userId);
+      } catch (err) {
+        console.error('[push] failed to clear invalid token:', err.message);
+      }
+    }
   } catch (err) {
     console.error('[push] sendPushToUser error:', err.message);
   }
