@@ -56,6 +56,7 @@ function formatUser(row) {
     pool_exit_pending:       row.pool_exit_pending,
     pool_exited_at:          row.pool_exited_at,
     pool_exit_reason:        row.pool_exit_reason,
+    has_been_in_pool_ever:   row.has_been_in_pool_ever,
     arena_intro_seen:        row.arena_intro_seen,
 
     notification_preferences: row.notification_preferences,

@@ -27,7 +27,8 @@ async function handlePoolTransition({ io, userId, wasInPool, isInPool, completud
           SET pool_unlocked_pending = TRUE,
               pool_unlocked_at      = COALESCE(pool_unlocked_at, NOW()),
               pool_exit_pending     = FALSE,
-              pool_exit_reason      = NULL
+              pool_exit_reason      = NULL,
+              has_been_in_pool_ever = TRUE
         WHERE id = $1`,
       [userId]
     );

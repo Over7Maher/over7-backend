@@ -80,6 +80,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_unlocked_at      TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exited_at        TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exit_pending     BOOLEAN     DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pool_exit_reason      TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS has_been_in_pool_ever BOOLEAN     NOT NULL DEFAULT FALSE;
 
 -- Arena validation tracking. arena_votes_received exists in production
 -- (added through ad-hoc migrations historically) but was missing from
