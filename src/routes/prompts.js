@@ -4,6 +4,7 @@ const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const { calculateCompletude } = require('../services/completude');
 const { shouldBeInPool } = require('../services/poolGate');
+const formatUser = require('../utils/formatUser');
 
 const router = express.Router();
 
@@ -91,13 +92,12 @@ router.put(
       }
 
       // Recompute completude + pool eligibility with the new prompts count
-      const merged     = { ...req.user, prompts_count: prompts.length };
-      const newPct     = calculateCompletude(merged);
+      const newPct     = calculateCompletude(req.user, prompts.length);
       const wasInPool  = req.user.is_in_pool === true;
-      const newInPool  = shouldBeInPool({ ...merged, completude_pct: newPct });
+      const newInPool  = shouldBeInPool({ ...req.user, completude_pct: newPct });
 
-      await client.query(
-        `UPDATE users SET completude_pct = $1, is_in_pool = $2 WHERE id = $3`,
+      const { rows: updatedRows } = await client.query(
+        `UPDATE users SET completude_pct = $1, is_in_pool = $2 WHERE id = $3 RETURNING *`,
         [newPct, newInPool, userId]
       );
 
@@ -113,7 +113,7 @@ router.put(
         );
       }
 
-      res.status(204).end();
+      res.json(formatUser(updatedRows[0]));
     } catch (err) {
       await client.query('ROLLBACK');
       next(err);

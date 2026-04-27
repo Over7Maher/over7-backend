@@ -3,8 +3,9 @@ const { body, validationResult } = require('express-validator');
 const { v4: uuidv4 } = require('uuid');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
-const { calculateCompletude } = require('../services/completude');
+const { calculateCompletude, completudeBreakdown } = require('../services/completude');
 const { shouldBeInPool } = require('../services/poolGate');
+const formatUser = require('../utils/formatUser');
 
 const router = express.Router();
 
@@ -16,62 +17,6 @@ function validate(req, res, next) {
   next();
 }
 
-// Columns exposed on profile responses (never return raw rows)
-function formatUser(row) {
-  return {
-    id:                  row.id,
-    email:               row.email,
-    name:                row.name,
-    birth_date:          row.birth_date,
-    city:                row.city,
-    bio:                 row.bio,
-    profile_picture_url: row.profile_picture_url,
-    photos:              row.photos,
-    tags:                row.tags,
-
-    // Dating preferences
-    relation_type:       row.relation_type,
-    family_plans:        row.family_plans,
-    communication_style: row.communication_style,
-    love_language:       row.love_language,
-
-    // Identity & lifestyle
-    gender:              row.gender,
-    height_cm:           row.height_cm,
-    languages:           row.languages,
-    astro_sign:          row.astro_sign,
-    education:           row.education,
-    job_title:           row.job_title,
-    company:             row.company,
-    pet:                 row.pet,
-    alcohol:             row.alcohol,
-    tobacco:             row.tobacco,
-    sport:               row.sport,
-    social_media:        row.social_media,
-    evenings_type:       row.evenings_type,
-    weekends_type:       row.weekends_type,
-    favorite_song:       row.favorite_song,
-
-    // Matching preferences
-    seeking:             row.seeking,
-    age_min:             row.age_min,
-    age_max:             row.age_max,
-    distance_max:        row.distance_max,
-
-    // Scores & pool
-    completude_pct:          row.completude_pct,
-    arena_votes_given:       row.arena_votes_given,
-    is_in_pool:              row.is_in_pool,
-    avg_rating:              row.avg_rating,
-    pool_unlocked_pending:   row.pool_unlocked_pending,
-    pool_unlocked_at:        row.pool_unlocked_at,
-    arena_intro_seen:        row.arena_intro_seen,
-
-    notification_preferences: row.notification_preferences,
-
-    created_at:              row.created_at,
-  };
-}
 
 // ── POST /users/register ──────────────────────────────────────────────────────
 // Called once after Firebase sign-up, before onboarding.
@@ -162,6 +107,24 @@ router.post(
 // ── GET /users/me ─────────────────────────────────────────────────────────────
 router.get('/me', auth, (req, res) => {
   res.json(formatUser(req.user));
+});
+
+// ── GET /users/me/completude ──────────────────────────────────────────────────
+// Server-authoritative completude grid: { pct, items: [{key,label,pts,done}] }.
+// The frontend renders the detail screen as a pure consumer — no local recomputation,
+// so the grid stays in sync with the server's calculateCompletude() automatically.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/me/completude', auth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::INT AS count FROM user_prompts WHERE user_id = $1`,
+      [req.user.id]
+    );
+    const promptsCount = rows[0]?.count ?? 0;
+    res.json(completudeBreakdown(req.user, promptsCount));
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ── GET /users/me/counts ──────────────────────────────────────────────────────
@@ -421,18 +384,20 @@ router.patch(
                   'dist=' + updates.distance_max);
     }
 
-    // Prompts count is needed for the completude bonus (+3 per prompt, max 5)
+    // Prompts count is needed for the "3 minimum prompts" item (+7 pts).
     const { rows: promptRows } = await pool.query(
       `SELECT COUNT(*)::INT AS count FROM user_prompts WHERE user_id = $1`,
       [req.user.id]
     );
     const promptsCount = promptRows[0]?.count ?? 0;
 
-    // Merge incoming changes onto the current user to compute new completude_pct and pool eligibility
-    const merged = { ...req.user, ...updates, prompts_count: promptsCount };
-    updates.completude_pct = calculateCompletude(merged);
+    // Merge incoming changes onto the current user to compute new completude_pct and pool eligibility.
+    // Pass the freshly computed completude_pct to shouldBeInPool — otherwise crossing the 70% threshold
+    // via PATCH wouldn't open the pool until the NEXT PATCH (latent two-step delay).
+    const merged = { ...req.user, ...updates };
+    updates.completude_pct = calculateCompletude(merged, promptsCount);
     const wasInPool   = req.user.is_in_pool === true;
-    const newIsInPool = shouldBeInPool(merged);
+    const newIsInPool = shouldBeInPool({ ...merged, completude_pct: updates.completude_pct });
     updates.is_in_pool = newIsInPool;
 
     const keys   = Object.keys(updates);
