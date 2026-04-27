@@ -1,5 +1,4 @@
 const pool = require('../db/pool');
-const { sendPushToUser } = require('./push');
 
 /**
  * Called after the row's is_in_pool flag has been updated. Detects entry/exit
@@ -32,18 +31,15 @@ async function handlePoolTransition({ io, userId, wasInPool, isInPool, completud
 
   // Exit: true → false
   if (wasInPool && !isInPool) {
-    // Pick the most likely cause for the message. Until arena_validated lands,
-    // an exit can also be triggered by avg_rating dropping below threshold —
-    // claiming "profil sous 70%" in that case would be wrong.
-    const reason = completudePct < 70 ? 'completude' : 'rating';
-    const body   = reason === 'completude'
-      ? 'Profil sous 70%. Reviens compléter.'
-      : "Ton profil n'est plus éligible. Vérifie ton score.";
+    // Reason hints at the actual cause so the frontend can route the modal CTA
+    // (EditProfile for completude, Arena for rating). The 'rating' branch will
+    // become unreachable once arena_validated lands; harmless until then.
+    const reason = completudePct < 70
+      ? 'completude_below_threshold'
+      : 'rating_below_threshold';
 
     io?.to(`user:${userId}`).emit('pool_lost', {
-      reason: reason === 'completude'
-        ? 'completude_below_threshold'
-        : 'rating_below_threshold',
+      reason,
       completude_pct: completudePct,
     });
 
@@ -55,15 +51,10 @@ async function handlePoolTransition({ io, userId, wasInPool, isInPool, completud
       [userId]
     );
 
-    // Non opt-out (category=null) — transactional/critical: the user is now
-    // blocked from Speed Date and Discover, they must be told.
-    sendPushToUser(
-      userId,
-      "Tu n'es plus dans le pool",
-      body,
-      { type: 'pool_exit', reason, completude_pct: completudePct },
-      null
-    );
+    // No push notification here: the user is in-app when this fires (an active
+    // profile edit is the only realistic trigger). Frontend listens for
+    // 'pool_lost' and shows a modal, backed by pool_exit_pending for
+    // next-focus persistence if missed.
   }
 }
 
