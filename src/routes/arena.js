@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 const { notBlockedClause } = require('../db/blocks');
 const { shouldBeInPool } = require('../services/poolGate');
 const { handlePoolTransition } = require('../services/poolTransition');
+const { handleArenaValidation } = require('../services/arenaValidation');
 
 const router = express.Router();
 
@@ -60,6 +61,7 @@ router.get('/profiles', async (req, res, next) => {
        FROM users u
        WHERE u.id        != $1
          AND u.is_active  = TRUE
+         AND u.arena_validated IS NOT TRUE
          AND ${notBlockedClause('$1', 'u')}
          AND NOT EXISTS (
            SELECT 1 FROM arena_votes av
@@ -107,6 +109,28 @@ router.post(
       return res.status(400).json({ error: 'Cannot vote on your own profile' });
     }
 
+    // Pre-flight: if voted user is already validated, drop the vote silently.
+    // arena_validated is a one-way switch, so a positive check here can't
+    // become a false negative during the transaction. The defense-in-depth
+    // `AND arena_validated IS NOT TRUE` on the avg_rating UPDATE below covers
+    // the rare race where the user gets validated between this check and the
+    // transaction (e.g. by another concurrent vote).
+    const { rows: validatedCheck } = await pool.query(
+      `SELECT arena_validated, arena_votes_received, avg_rating FROM users WHERE id = $1`,
+      [voted_id]
+    );
+    if (validatedCheck.length === 0) {
+      return res.status(404).json({ error: 'Voted user not found' });
+    }
+    if (validatedCheck[0].arena_validated === true) {
+      return res.json({
+        skipped:            true,
+        reason:             'voted_user_validated',
+        new_avg_rating:     Number(validatedCheck[0].avg_rating),
+        new_votes_received: validatedCheck[0].arena_votes_received,
+      });
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -133,14 +157,18 @@ router.post(
         [newIsInPool, voter_id]
       );
 
-      // 3a — Snapshot voted user's current pool status before any update
+      // 3a — Snapshot voted user's current pool + validation status before any update
       const { rows: votedBefore } = await client.query(
-        `SELECT is_in_pool FROM users WHERE id = $1`,
+        `SELECT is_in_pool, arena_validated FROM users WHERE id = $1`,
         [voted_id]
       );
-      const votedWasInPool = votedBefore[0]?.is_in_pool === true;
+      const votedWasInPool    = votedBefore[0]?.is_in_pool === true;
+      const votedWasValidated = votedBefore[0]?.arena_validated === true;
 
-      // 3b — Recalculate avg_rating for the voted profile (must run before shouldBeInPool check)
+      // 3b — Recalculate avg_rating for the voted profile (must run before shouldBeInPool check).
+      // The `AND arena_validated IS NOT TRUE` guard freezes avg_rating once validated, defending
+      // against the rare race where the pre-flight check passed but the user got validated by
+      // a concurrent vote between then and now.
       await client.query(
         `UPDATE users
          SET avg_rating = (
@@ -148,7 +176,7 @@ router.post(
            FROM arena_votes
            WHERE voted_id = $1
          )
-         WHERE id = $1`,
+         WHERE id = $1 AND arena_validated IS NOT TRUE`,
         [voted_id]
       );
 
@@ -189,6 +217,14 @@ router.post(
         wasInPool:     votedWasInPool,
         isInPool:      votedNewIsInPool,
         completudePct: votedRows[0].completude_pct,
+      });
+
+      await handleArenaValidation({
+        io,
+        userId:        voted_id,
+        wasValidated:  votedWasValidated,
+        votesReceived: votedRows[0].arena_votes_received,
+        avgRating:     Number(votedRows[0].avg_rating),
       });
 
       const { arena_votes_given } = voterRows[0];

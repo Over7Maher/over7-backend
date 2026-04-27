@@ -244,7 +244,7 @@ router.patch(
 // Partial update: keys absent from the body keep their current value.
 // Unknown keys or non-boolean values are silently dropped.
 // ─────────────────────────────────────────────────────────────────────────────
-const NOTIF_PREF_KEYS = ['match', 'message', 'speed_date', 'like'];
+const NOTIF_PREF_KEYS = ['match', 'message', 'speed_date', 'like', 'arena_milestone'];
 
 router.patch(
   '/me/notification-preferences',
@@ -446,6 +446,21 @@ router.post('/me/acknowledge-pool-exit', auth, async (req, res, next) => {
   try {
     await pool.query(
       `UPDATE users SET pool_exit_pending = FALSE WHERE id = $1`,
+      [req.user.id]
+    );
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /users/me/acknowledge-arena-validated ────────────────────────────────
+// Called after the celebration modal for arena validation is dismissed.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/me/acknowledge-arena-validated', auth, async (req, res, next) => {
+  try {
+    await pool.query(
+      `UPDATE users SET arena_validated_pending = FALSE WHERE id = $1`,
       [req.user.id]
     );
     res.status(204).end();

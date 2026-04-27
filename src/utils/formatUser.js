@@ -45,6 +45,10 @@ function formatUser(row) {
     // Scores & pool
     completude_pct:          row.completude_pct,
     arena_votes_given:       row.arena_votes_given,
+    arena_votes_received:    row.arena_votes_received,
+    arena_validated:         row.arena_validated,
+    arena_validated_at:      row.arena_validated_at,
+    arena_validated_pending: row.arena_validated_pending,
     is_in_pool:              row.is_in_pool,
     avg_rating:              row.avg_rating,
     pool_unlocked_pending:   row.pool_unlocked_pending,
