@@ -102,8 +102,7 @@ router.post(
   validate,
   async (req, res, next) => {
     const { voted_id, rating } = req.body;
-    const voter_id       = req.user.id;
-    const voterWasInPool = req.user.is_in_pool === true;
+    const voter_id = req.user.id;
 
     if (voted_id === voter_id) {
       return res.status(400).json({ error: 'Cannot vote on your own profile' });
@@ -142,7 +141,16 @@ router.post(
         [voter_id, voted_id, rating]
       );
 
-      // 2 — Increment voter's votes_given, then re-evaluate pool eligibility
+      // 2a — Snapshot voter's current pool status (mirror of votedBefore at 3a),
+      // taken inside the transaction so both snapshots share the same isolation
+      // and stay consistent with each other.
+      const { rows: voterBefore } = await client.query(
+        `SELECT is_in_pool FROM users WHERE id = $1`,
+        [voter_id]
+      );
+      const voterWasInPool = voterBefore[0]?.is_in_pool === true;
+
+      // 2b — Increment voter's votes_given, then re-evaluate pool eligibility
       const { rows: voterRows } = await client.query(
         `UPDATE users
          SET arena_votes_given = arena_votes_given + 1
