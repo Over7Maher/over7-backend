@@ -2,7 +2,10 @@ const pool = require('../db/pool');
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
-async function sendPush(pushToken, title, body, data = {}) {
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const MAX_PUSH_ATTEMPTS = 3;
+
+async function sendPush(pushToken, title, body, data = {}, attempt = 1) {
   try {
     const res = await fetch(EXPO_PUSH_URL, {
       method: 'POST',
@@ -28,10 +31,24 @@ async function sendPush(pushToken, title, body, data = {}) {
 
     if (ticket.status === 'error') {
       const code = ticket.details?.error || 'unknown_error';
+
+      // Transient: Expo rate-limits at 600 push/sec/app. Exponential backoff
+      // 1s, then 2s. Max 3 attempts → worst-case 3s of waits before giving up.
+      // Other Expo error codes (DeviceNotRegistered, MessageTooBig, etc.) are
+      // not transient — handled by the caller (sendPushToUser nullifies stale
+      // tokens) or by the application (caller bug / infra config).
+      if (code === 'MessageRateExceeded' && attempt < MAX_PUSH_ATTEMPTS) {
+        const backoffMs = 1000 * Math.pow(2, attempt - 1);
+        console.warn(`[push] MessageRateExceeded, retrying in ${backoffMs}ms (attempt ${attempt}/${MAX_PUSH_ATTEMPTS})`);
+        await sleep(backoffMs);
+        return sendPush(pushToken, title, body, data, attempt + 1);
+      }
+
       console.error('[push] Expo error:', {
         code,
         message: ticket.message,
         token:   pushToken.slice(0, 30) + '…',
+        attempt,
       });
       return { ok: false, code, message: ticket.message };
     }
