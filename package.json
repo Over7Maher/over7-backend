@@ -6,10 +6,18 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "db:migrate": "psql $DATABASE_URL -f src/db/schema.sql"
+    "db:migrate": "psql $DATABASE_URL -f src/db/schema.sql",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/__tests__/**/*.test.js"],
+    "collectCoverageFrom": ["src/**/*.js", "!src/app.js"]
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -29,6 +37,7 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "jest": "^30.3.0",
     "nodemon": "^3.1.4"
   }
 }
