@@ -34,4 +34,34 @@ function uploadPhoto(fileBuffer, userId) {
   });
 }
 
-module.exports = { cloudinary, uploadPhoto };
+/**
+ * Permanently deletes all photos uploaded by a user from Cloudinary.
+ * Called by the RGPD purge cron after the 30-day grace period.
+ *
+ * Uses delete_resources_by_prefix to wipe all assets under
+ * over7/users/{userId}/ in one API call, then delete_folder to remove
+ * the empty folder. Folder removal is best-effort — logs a warning if
+ * it fails (e.g. nested empty subdirs, already gone) but does not throw.
+ *
+ * Returns { deleted: number, folderRemoved: boolean } for logging.
+ * Throws on resource-deletion API failure — caller catches and continues
+ * to the DB delete (orphan assets are acceptable, can be swept later).
+ */
+async function deleteUserPhotos(userId) {
+  const prefix = `over7/users/${userId}/`;
+
+  const deletion      = await cloudinary.api.delete_resources_by_prefix(prefix);
+  const deletedCount  = Object.keys(deletion?.deleted || {}).length;
+
+  let folderRemoved = false;
+  try {
+    await cloudinary.api.delete_folder(`over7/users/${userId}`);
+    folderRemoved = true;
+  } catch (err) {
+    console.warn(`[cloudinary] could not delete folder ${prefix}:`, err.message);
+  }
+
+  return { deleted: deletedCount, folderRemoved };
+}
+
+module.exports = { cloudinary, uploadPhoto, deleteUserPhotos };

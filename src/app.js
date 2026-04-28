@@ -7,6 +7,7 @@ const helmet       = require('helmet');
 const rateLimit    = require('express-rate-limit');
 const initSocket   = require('./services/socket');
 const errorHandler = require('./middleware/errorHandler');
+const { scheduleJobs } = require('./jobs/scheduler');
 
 // ── Express + HTTP server ─────────────────────────────────────────────────────
 const app    = express();
@@ -116,4 +117,7 @@ app.use(errorHandler);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Over7 API running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Over7 API running on port ${PORT}`);
+  scheduleJobs();
+});
