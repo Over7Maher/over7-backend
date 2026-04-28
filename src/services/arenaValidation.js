@@ -1,5 +1,6 @@
 const pool = require('../db/pool');
 const { sendPushToUser } = require('./push');
+const { setArenaValidated } = require('./arenaValidatedCache');
 
 /**
  * Called after a vote on `userId` has been recorded and avg_rating recalculated.
@@ -33,6 +34,10 @@ async function handleArenaValidation({ io, userId, wasValidated, votesReceived, 
       WHERE id = $1`,
     [userId]
   );
+
+  // Pre-warm the LRU cache used by POST /vote pre-flight, so the next vote
+  // toward this user immediately sees the fresh status (zero stale window).
+  setArenaValidated(userId);
 
   io?.to(`user:${userId}`).emit('arena_validated', {
     avg_rating:     avgRating,

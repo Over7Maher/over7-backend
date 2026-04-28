@@ -6,6 +6,7 @@ const { notBlockedClause } = require('../db/blocks');
 const { shouldBeInPool } = require('../services/poolGate');
 const { handlePoolTransition } = require('../services/poolTransition');
 const { handleArenaValidation } = require('../services/arenaValidation');
+const { isArenaValidated } = require('../services/arenaValidatedCache');
 
 const router = express.Router();
 
@@ -114,19 +115,36 @@ router.post(
     // `AND arena_validated IS NOT TRUE` on the avg_rating UPDATE below covers
     // the rare race where the user gets validated between this check and the
     // transaction (e.g. by another concurrent vote).
-    const { rows: validatedCheck } = await pool.query(
-      `SELECT arena_validated, arena_votes_received, avg_rating FROM users WHERE id = $1`,
-      [voted_id]
-    );
-    if (validatedCheck.length === 0) {
+    //
+    // Cache-backed: isArenaValidated returns true|false from an LRU cache
+    // (5 min TTL, pre-warmed on FALSE→TRUE transitions), or null when the
+    // user does not exist. On cached=false we skip the pre-flight entirely
+    // and let the FK ON DELETE CASCADE on arena_votes.voted_id materialize
+    // a 404 via 23503 in the transaction's catch handler if voted_id is
+    // forged or race-deleted.
+    const validated = await isArenaValidated(voted_id, pool);
+
+    if (validated === null) {
       return res.status(404).json({ error: 'Voted user not found' });
     }
-    if (validatedCheck[0].arena_validated === true) {
+
+    if (validated === true) {
+      // Cache-only stores the boolean — fetch the two display fields needed
+      // for the skipped-vote payload. Tiny 2-column read, only on the (rare)
+      // hits toward already-validated users.
+      const { rows } = await pool.query(
+        `SELECT arena_votes_received, avg_rating FROM users WHERE id = $1`,
+        [voted_id]
+      );
+      if (rows.length === 0) {
+        // Race: user deleted between cache hit and this query. TTL evicts in 5 min.
+        return res.status(404).json({ error: 'Voted user not found' });
+      }
       return res.json({
         skipped:            true,
         reason:             'voted_user_validated',
-        new_avg_rating:     Number(validatedCheck[0].avg_rating),
-        new_votes_received: validatedCheck[0].arena_votes_received,
+        new_avg_rating:     Number(rows[0].avg_rating),
+        new_votes_received: rows[0].arena_votes_received,
       });
     }
 
@@ -245,6 +263,12 @@ router.post(
       });
     } catch (err) {
       await client.query('ROLLBACK');
+      // FK violation on arena_votes.voted_id = voted user does not exist.
+      // This materializes the 404 we used to detect via the pre-flight SELECT,
+      // now skipped on cache hit (validated=false) for the dominant happy path.
+      if (err.code === '23503') {
+        return res.status(404).json({ error: 'Voted user not found' });
+      }
       // Unique violation = already voted on this profile
       if (err.code === '23505') {
         return res.status(409).json({ error: 'Already voted on this profile' });
