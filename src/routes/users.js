@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const { calculateCompletude, completudeBreakdown } = require('../services/completude');
@@ -87,7 +87,7 @@ router.post(
         // Falls through to INSERT below.
       }
 
-      const id = uuidv4();
+      const id = randomUUID();
       const { rows } = await pool.query(
         `INSERT INTO users (id, firebase_uid, email, name, birth_date, seeking, age_min, age_max, distance_max)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

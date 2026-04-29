@@ -213,11 +213,11 @@ describe('POST /api/messages/:matchId', () => {
     });
 
     // Anti-tampering: sender_id passed to INSERT MUST be ME_ID (req.user.id),
-    // never trusted from request body. INSERT params: [uuidv4(), matchId, userId, content].
+    // never trusted from request body. INSERT params: [randomUUID(), matchId, userId, content].
     const insertCall = pool.query.mock.calls[2];
     expect(insertCall[0]).toMatch(/INSERT INTO messages/);
     const [generatedId, sqlMatchId, sqlSenderId, sqlContent] = insertCall[1];
-    expect(typeof generatedId).toBe('string'); // uuidv4 produced
+    expect(typeof generatedId).toBe('string'); // crypto.randomUUID produced
     expect(sqlMatchId).toBe(MATCH_ID);
     expect(sqlSenderId).toBe(ME_ID); // ← anti-tampering guarantee
     expect(sqlContent).toBe('hello!');

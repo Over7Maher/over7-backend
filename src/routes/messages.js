@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
 const auth = require('../middleware/auth');
 const { sendPushToUser } = require('../services/push');
@@ -120,7 +120,7 @@ router.post(
         `INSERT INTO messages (id, match_id, sender_id, content)
          VALUES ($1, $2, $3, $4)
          RETURNING id, match_id, sender_id, content, read_at, created_at`,
-        [uuidv4(), matchId, userId, content.trim()]
+        [randomUUID(), matchId, userId, content.trim()]
       );
 
       const message = { ...rows[0], sender_name: req.user.name };

@@ -1,5 +1,5 @@
 const { Server } = require('socket.io');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 const getAdmin = require('./firebaseAdmin');
 const pool     = require('../db/pool');
 
@@ -112,7 +112,7 @@ function initSocket(server) {
           `INSERT INTO messages (id, match_id, sender_id, content)
            VALUES ($1, $2, $3, $4)
            RETURNING id, match_id, sender_id, content, read_at, created_at`,
-          [uuidv4(), matchId, socket.user.id, trimmed]
+          [randomUUID(), matchId, socket.user.id, trimmed]
         );
 
         const message = { ...rows[0], sender_name: socket.user.name };
