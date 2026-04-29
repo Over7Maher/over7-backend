@@ -22,7 +22,7 @@ function mockExpoTickets(...tickets) {
 
 describe('sendPush — Expo response parsing', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   test('Success ticket (single object) → { ok: true, ticketId }', async () => {
@@ -107,7 +107,7 @@ describe('sendPush — Expo response parsing', () => {
 
 describe('sendPush — MessageRateExceeded retry', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     jest.useFakeTimers();
   });
 
@@ -177,7 +177,7 @@ describe('sendPush — MessageRateExceeded retry', () => {
 
 describe('sendPushToUser — DB lookup, opt-out, stale token cleanup', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     global.fetch = jest.fn();
   });
 

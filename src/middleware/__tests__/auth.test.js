@@ -24,7 +24,7 @@ function mockReqRes(authHeader) {
 
 describe('auth middleware', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   test('Missing Authorization header → 401', async () => {

@@ -10,7 +10,7 @@ describe('handlePoolTransition', () => {
   let io;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     pool.query.mockResolvedValue({ rows: [] });
     io = mockIo();
   });

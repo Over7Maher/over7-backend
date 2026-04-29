@@ -11,7 +11,7 @@ const { scheduleJobs } = require('../scheduler');
 
 describe('scheduleJobs', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   test('Registers exactly one cron job', () => {

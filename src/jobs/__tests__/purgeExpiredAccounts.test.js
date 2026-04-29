@@ -11,7 +11,7 @@ const { purgeExpiredAccounts } = require('../purgeExpiredAccounts');
 
 describe('purgeExpiredAccounts', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   test('No accounts to purge → no-op', async () => {

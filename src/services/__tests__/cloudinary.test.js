@@ -14,7 +14,7 @@ const { deleteUserPhotos } = require('../cloudinary');
 
 describe('deleteUserPhotos', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   test('3 photos deleted + folder removed → returns counts', async () => {
