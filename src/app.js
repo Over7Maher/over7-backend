@@ -116,8 +116,15 @@ app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 app.use(errorHandler);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Over7 API running on port ${PORT}`);
-  scheduleJobs();
-});
+// Guard so supertest can `require('../app')` to mount routes without binding
+// a port or starting cron jobs. The real server still boots when this file is
+// run as the entrypoint (npm start / node src/app.js).
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => {
+    console.log(`Over7 API running on port ${PORT}`);
+    scheduleJobs();
+  });
+}
+
+module.exports = app;
