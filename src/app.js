@@ -6,7 +6,8 @@ const cors         = require('cors');
 const helmet       = require('helmet');
 const rateLimit    = require('express-rate-limit');
 const initSocket   = require('./services/socket');
-const errorHandler = require('./middleware/errorHandler');
+const errorHandler        = require('./middleware/errorHandler');
+const multerErrorHandler  = require('./middleware/multerErrorHandler');
 const { scheduleJobs } = require('./jobs/scheduler');
 
 // ── Express + HTTP server ─────────────────────────────────────────────────────
@@ -112,7 +113,11 @@ app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date()
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
-// ── Error handler ─────────────────────────────────────────────────────────────
+// ── Error handlers ────────────────────────────────────────────────────────────
+// multerErrorHandler runs first so MulterError instances get a clean 400/413
+// response with a human-readable message. Anything else falls through to the
+// generic errorHandler.
+app.use(multerErrorHandler);
 app.use(errorHandler);
 
 // ── Start ─────────────────────────────────────────────────────────────────────

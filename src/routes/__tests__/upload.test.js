@@ -62,15 +62,15 @@ describe('POST /api/upload/photo', () => {
     expect(res.body.error).toMatch(/no file/i);
   });
 
-  test('Disallowed mimetype (image/gif) → next(err) via Multer fileFilter', async () => {
+  test('Disallowed mimetype (image/gif) → 400 via multerErrorHandler', async () => {
     mockAuthOk();
     const res = await request(app)
       .post('/api/upload/photo')
       .set('Authorization', 'Bearer t')
       .attach('photo', FAKE_JPEG, { filename: 'test.gif', contentType: 'image/gif' });
 
-    // MulterError lacks a status property → errorHandler falls back to 500.
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/format de fichier non support|jpg\/png\/webp/i);
     expect(mockUploadPhoto).not.toHaveBeenCalled();
   });
 
@@ -171,7 +171,7 @@ describe('POST /api/upload/photos', () => {
     });
   });
 
-  test('Disallowed mimetype on one of the files → 500 via Multer fileFilter', async () => {
+  test('Disallowed mimetype on one of the files → 400 via multerErrorHandler', async () => {
     mockAuthOk();
     const res = await request(app)
       .post('/api/upload/photos')
@@ -179,7 +179,8 @@ describe('POST /api/upload/photos', () => {
       .attach('photos', FAKE_JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' })
       .attach('photos', FAKE_JPEG, { filename: 'bad.gif', contentType: 'image/gif' });
 
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/format de fichier non support|jpg\/png\/webp/i);
     expect(mockUploadPhoto).not.toHaveBeenCalled();
   });
 });
