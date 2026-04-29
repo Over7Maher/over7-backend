@@ -46,7 +46,7 @@ describe('GET /health', () => {
 
 describe('GET /api/users/me', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   test('Missing Authorization header → 401', async () => {
@@ -114,7 +114,7 @@ describe('GET /api/users/me', () => {
 });
 
 describe('POST /api/users/register', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   test('Missing firebase_uid → 422 validation error', async () => {
     const res = await request(app).post('/api/users/register').send({});
@@ -166,7 +166,7 @@ describe('POST /api/users/register', () => {
 });
 
 describe('GET /api/users/me/completude', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   test('Missing Authorization → 401', async () => {
     const res = await request(app).get('/api/users/me/completude');
@@ -188,7 +188,7 @@ describe('GET /api/users/me/completude', () => {
 });
 
 describe('GET /api/users/me/counts', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   test('Auth OK → 200 with likes_received and unread_matches', async () => {
     mockAuthOk();
@@ -205,7 +205,7 @@ describe('GET /api/users/me/counts', () => {
 });
 
 describe('POST /api/users/me/seen-matches', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   test('Missing Authorization → 401', async () => {
     const res = await request(app).post('/api/users/me/seen-matches');
@@ -227,7 +227,7 @@ describe('POST /api/users/me/seen-matches', () => {
 });
 
 describe('POST /api/users/me/seen-likes', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   test('Auth OK → 204 + UPDATE last_seen_likes_at', async () => {
     mockAuthOk();
@@ -244,7 +244,7 @@ describe('POST /api/users/me/seen-likes', () => {
 });
 
 describe('PATCH /api/users/me/push-token', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   test('Empty token → 422', async () => {
     mockAuthOk();
@@ -281,7 +281,7 @@ describe('PATCH /api/users/me/push-token', () => {
 });
 
 describe('PATCH /api/users/me/notification-preferences', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   test('Missing preferences object → 400', async () => {
     mockAuthOk();
@@ -323,7 +323,7 @@ describe('PATCH /api/users/me/notification-preferences', () => {
 });
 
 describe('PATCH /api/users/me/location', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   test('Latitude out of range → 422', async () => {
     mockAuthOk();
@@ -352,7 +352,7 @@ describe('PATCH /api/users/me/location', () => {
 });
 
 describe('PATCH /api/users/me', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   test('No valid fields in body → 400', async () => {
     mockAuthOk();
@@ -394,7 +394,7 @@ describe('PATCH /api/users/me', () => {
 });
 
 describe('POST /api/users/me/acknowledge-* (4 routes)', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   const routes = [
     { path: '/api/users/me/acknowledge-pool-unlock',     column: 'pool_unlocked_pending = FALSE' },
@@ -418,7 +418,7 @@ describe('POST /api/users/me/acknowledge-* (4 routes)', () => {
 });
 
 describe('DELETE /api/users/me', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   test('Active user → 204 + soft delete (is_active=FALSE, deleted_at=NOW())', async () => {
     mockAuthOk();
