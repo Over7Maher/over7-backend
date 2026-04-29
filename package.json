@@ -9,7 +9,11 @@
     "db:migrate": "psql $DATABASE_URL -f src/db/schema.sql",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.js\"",
+    "format:check": "prettier --check \"src/**/*.js\""
   },
   "engines": {
     "node": ">=20.0.0"
@@ -26,7 +30,10 @@
       "!src/**/*.test.js"
     ],
     "coverageDirectory": "coverage",
-    "coverageReporters": ["text", "lcov"]
+    "coverageReporters": [
+      "text",
+      "lcov"
+    ]
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -46,9 +53,15 @@
     "socket.io": "^4.7.5"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jest": "^29.15.2",
+    "eslint-plugin-n": "^17.24.0",
     "jest": "^30.3.0",
     "jest-circus": "^30.3.0",
     "nodemon": "^3.1.4",
+    "prettier": "^3.8.3",
     "supertest": "^7.2.2"
   }
 }
