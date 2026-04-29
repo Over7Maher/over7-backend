@@ -45,13 +45,11 @@ router.get(
     query('limit')
       .optional()
       .isInt({ min: 1, max: 50 })
-      .withMessage('limit must be an integer between 1 and 50')
-      .toInt(),
+      .withMessage('limit must be an integer between 1 and 50'),
     query('offset')
       .optional()
       .isInt({ min: 0 })
-      .withMessage('offset must be a non-negative integer')
-      .toInt(),
+      .withMessage('offset must be a non-negative integer'),
   ],
   validate,
   async (req, res, next) => {
@@ -64,8 +62,11 @@ router.get(
       return res.status(400).json({ error: 'Location required to discover profiles' });
     }
 
-    const limit  = req.query.limit  ?? 10;
-    const offset = req.query.offset ?? 0;
+    // Express 5: req.query is a read-only getter, so express-validator's
+    // .toInt() sanitizer cannot mutate it anymore. Parse explicitly here,
+    // mirroring the pattern already used below for age_min/age_max/distance_max.
+    const limit  = req.query.limit  ? parseInt(req.query.limit, 10)  : 10;
+    const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
 
     // Query-param overrides fall back to the user's stored preferences
     const seekingSource = req.query.gender || me.seeking;

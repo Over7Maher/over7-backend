@@ -47,6 +47,10 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+// Express 5: req.body is undefined when no Content-Type is set.
+// We restore the v4 behavior of empty object default to avoid
+// 500 TypeErrors in route handlers that read req.body.foo.
+app.use((req, _res, next) => { req.body ??= {}; next(); });
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({
