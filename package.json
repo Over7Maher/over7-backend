@@ -21,8 +21,12 @@
     ],
     "collectCoverageFrom": [
       "src/**/*.js",
-      "!src/app.js"
-    ]
+      "!src/app.js",
+      "!src/**/__tests__/**",
+      "!src/**/*.test.js"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["text", "lcov"]
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
